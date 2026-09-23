@@ -40,6 +40,8 @@ export async function buildInitializeBetVault(
     /** Omit → the authority resolves. */
     resolver?: PublicKey;
     allowlist?: PublicKey[];
+    /** 0 (default) = 7 days. */
+    voidGraceSecs?: number;
     collateralMint?: PublicKey;
   },
 ): Promise<TransactionInstruction> {
@@ -55,6 +57,7 @@ export async function buildInitializeBetVault(
       p.lpBps,
       p.resolver ?? PublicKey.default,
       p.allowlist ?? [],
+      bn(p.voidGraceSecs ?? 0),
     )
     .accountsPartial({
       authority: p.authority,
@@ -145,6 +148,25 @@ export async function buildSettleBetVault(
   const collateralMint = p.collateralMint ?? ctx.collateralMint;
   return ctx.program.methods
     .settleBetVault()
+    .accountsPartial({
+      signer: p.signer,
+      betVault: p.betVault,
+      market: p.market,
+      marketVault: deriveMarketVault(ctx.programId, p.market),
+      vaultCollateral: deriveBetVaultCollateral(p.betVault, collateralMint),
+      vaultLpPosition: deriveLpPosition(ctx.programId, p.market, p.betVault),
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .instruction();
+}
+
+export async function buildVoidBetVault(
+  ctx: IxContext,
+  p: { signer: PublicKey; betVault: PublicKey; market: PublicKey; collateralMint?: PublicKey },
+): Promise<TransactionInstruction> {
+  const collateralMint = p.collateralMint ?? ctx.collateralMint;
+  return ctx.program.methods
+    .voidBetVault()
     .accountsPartial({
       signer: p.signer,
       betVault: p.betVault,

@@ -126,6 +126,10 @@ export interface BetVaultAccount {
   claimedStake: Bn;
   paidOut: Bn;
   refunding: boolean;
+  /** Grace period after market end before `void_bet_vault` opens (seconds). */
+  voidGraceSecs: Bn;
+  /** True once voided: `claim_bet` refunds every committer pro-rata. */
+  voided: boolean;
   bump: number;
 }
 

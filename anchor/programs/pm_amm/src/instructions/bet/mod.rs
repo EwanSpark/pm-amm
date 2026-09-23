@@ -15,6 +15,7 @@ pub mod launch_bet_vault;
 pub mod refund_bet;
 pub mod resolve_bet_vault;
 pub mod settle_bet_vault;
+pub mod void_bet_vault;
 
 #[allow(ambiguous_glob_reexports)]
 pub use bet_commit::*;
@@ -30,6 +31,8 @@ pub use refund_bet::*;
 pub use resolve_bet_vault::*;
 #[allow(ambiguous_glob_reexports)]
 pub use settle_bet_vault::*;
+#[allow(ambiguous_glob_reexports)]
+pub use void_bet_vault::*;
 
 use crate::state::BetVault;
 

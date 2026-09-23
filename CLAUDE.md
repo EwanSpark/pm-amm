@@ -75,16 +75,16 @@ cd oracle && python3 test_properties.py    # 18 tests (paper properties A-G)
 
 | Suite | Count | Run with |
 |---|---|---|
-| Rust unit | **82** | `pnpm run test:rust` |
+| Rust unit | **83** | `pnpm run test:rust` |
 | TS integration — `pm_amm.ts` (binary lifecycle) | **20** | `pnpm run test` (localnet) |
 | TS integration — `group_market.ts` (5 group ix) | **22** | (same) |
 | TS integration — `access_control.ts` | **6** | (same) |
 | TS integration — `vault.ts` (Sprint 22 commit vault) | **9** | (same) |
 | TS integration — `vault_group.ts` (Sprint 23 multi-outcome vault) | **9** | (same) |
-| TS integration — `lifecycle/bet_vault.ts` (Sprint 25 bet vault + surplus fix) | **16** | (same) |
+| TS integration — `lifecycle/bet_vault.ts` (Sprint 25 bet vault + surplus fix) | **19** | (same) |
 | Python oracle | **112** | `python3 oracle/test_oracle.py` |
 | Python properties | **18** | `python3 oracle/test_properties.py` |
-| **Total (Rust + TS + Python)** | **294** | (collected manually) |
+| **Total (Rust + TS + Python)** | **298** | (collected manually) |
 
 `anchor test` runs **surfpool**, not `solana-test-validator`: blocks (and the
 clock) advance per transaction, not with wall time. So `tests/lifecycle/*.ts`
@@ -175,6 +175,11 @@ surplus fix. Spec + open items: `doc/sprints/sprint-25-bet-vault-v2.md`.
   and the vault PDA is `market.authority` (creator fee flows into the pot).
 - **`swap` fee hole fixed**: `creator_usdc = None` now requires the signer to be
   the market authority (any trader could keep the creator's 1%).
+- **Void fallback**: if the resolver never resolves, anyone can `void_bet_vault`
+  after `market.end_ts + void_grace_secs` (300 s..30 d, default 7 d) and every
+  committer is refunded pro-rata — no winner, no loser. Works because the vault's
+  claims are equal on both sides, so the liquidity slice converts back through
+  pair redemption without knowing the outcome.
 
 ### Previous — Sprint 23
 

@@ -293,6 +293,7 @@ pub mod pm_amm {
         lp_bps: u16,
         resolver: Pubkey,
         allowlist: Vec<Pubkey>,
+        void_grace_secs: i64,
     ) -> Result<()> {
         instructions::bet::initialize_bet_vault::handler(
             ctx,
@@ -304,6 +305,7 @@ pub mod pm_amm {
             lp_bps,
             resolver,
             allowlist,
+            void_grace_secs,
         )
     }
 
@@ -333,6 +335,13 @@ pub mod pm_amm {
     /// position.
     pub fn claim_bet(ctx: Context<ClaimBet>) -> Result<()> {
         instructions::bet::claim_bet::handler(ctx)
+    }
+
+    /// Fallback when the resolver never resolves: after `market.end_ts +
+    /// void_grace_secs`, anyone can void the vault and `claim_bet` then refunds
+    /// every committer pro-rata to their stake.
+    pub fn void_bet_vault(ctx: Context<VoidBetVault>) -> Result<()> {
+        instructions::bet::void_bet_vault::handler(ctx)
     }
 
     /// Refund 1:1 when the bet vault can never launch. Closes the position.

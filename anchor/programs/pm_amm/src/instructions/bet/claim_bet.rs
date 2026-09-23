@@ -1,6 +1,8 @@
 //! Claim a settled bet. Winners get `payout_pool × stake / winning_total`
 //! (the claim completing the winning side sweeps the rounding dust); losers get
-//! 0. The position is closed either way (rent back to the committer).
+//! 0. On a vault voided by `void_bet_vault` (no resolution), every committer is
+//! refunded pro-rata to their total stake instead. The position is closed
+//! either way (rent back to the committer).
 
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
@@ -50,14 +52,8 @@ pub struct ClaimBet<'info> {
 pub fn handler(ctx: Context<ClaimBet>) -> Result<()> {
     let v = &mut ctx.accounts.bet_vault;
     require!(v.settled, PmAmmError::BetVaultNotSettled);
-    let stake = ctx.accounts.position.stake_on(v.winning_side);
-    let payout = bet_payout(
-        v.payout_pool,
-        stake,
-        v.winning_total(),
-        v.claimed_stake,
-        v.paid_out,
-    );
+    let (stake, basis) = v.payout_basis(&ctx.accounts.position);
+    let payout = bet_payout(v.payout_pool, stake, basis, v.claimed_stake, v.paid_out);
     v.claimed_stake = v.claimed_stake.saturating_add(stake);
     v.paid_out = v.paid_out.saturating_add(payout);
     let (id_bytes, bump) = (v.vault_id.to_le_bytes(), [v.bump]);
@@ -77,10 +73,16 @@ pub fn handler(ctx: Context<ClaimBet>) -> Result<()> {
             payout,
         )?;
     }
+    let voided = ctx.accounts.bet_vault.voided;
     msg!(
-        "Bet claim {}: stake {} on winner -> {}",
+        "Bet claim {}: stake {} ({}) -> {}",
         ctx.accounts.signer.key(),
         stake,
+        if voided {
+            "voided refund"
+        } else {
+            "winning side"
+        },
         payout
     );
     Ok(())

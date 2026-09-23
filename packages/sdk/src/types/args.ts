@@ -64,6 +64,9 @@ export interface CreateBetVaultInput {
   resolver?: PublicKey;
   /** Up to 8 keys allowed to commit (e.g. the two sides of a 1v1). Empty = open. */
   allowlist?: PublicKey[];
+  /** Seconds after market end before anyone may void the vault and refund every
+   *  stake (the resolver never resolved). 300 .. 30 days; default 7 days. */
+  voidGraceSecs?: number;
   /** Collateral mint (any SPL token). Defaults to the client's collateral. */
   collateralMint?: PublicKey;
 }

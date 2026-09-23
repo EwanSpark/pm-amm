@@ -1322,6 +1322,10 @@ export type PmAmm = {
           "type": {
             "vec": "pubkey"
           }
+        },
+        {
+          "name": "voidGraceSecs",
+          "type": "i64"
         }
       ]
     },
@@ -3928,6 +3932,184 @@ export type PmAmm = {
       ]
     },
     {
+      "name": "voidBetVault",
+      "docs": [
+        "Fallback when the resolver never resolves: after `market.end_ts +",
+        "void_grace_secs`, anyone can void the vault and `claim_bet` then refunds",
+        "every committer pro-rata to their stake."
+      ],
+      "discriminator": [
+        166,
+        7,
+        212,
+        72,
+        200,
+        96,
+        93,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true
+        },
+        {
+          "name": "betVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bet_vault.vault_id",
+                "account": "betVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "marketVault",
+          "writable": true
+        },
+        {
+          "name": "vaultCollateral",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "betVault"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bet_vault.collateral_mint",
+                "account": "betVault"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "vaultLpPosition",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "betVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "withdrawLiquidity",
       "docs": [
         "Withdraw LP shares: auto-claims pending residuals, then mints",
@@ -4416,6 +4598,16 @@ export type PmAmm = {
       "code": 6052,
       "name": "betVaultAlreadySettled",
       "msg": "Bet vault already settled"
+    },
+    {
+      "code": 6053,
+      "name": "invalidVoidGrace",
+      "msg": "void_grace_secs must be between 5 min and 30 days"
+    },
+    {
+      "code": 6054,
+      "name": "voidTooEarly",
+      "msg": "Void grace period has not elapsed yet"
     }
   ],
   "types": [
@@ -4603,6 +4795,22 @@ export type PmAmm = {
             "type": "bool"
           },
           {
+            "name": "voidGraceSecs",
+            "docs": [
+              "Grace period after `market.end_ts` before `void_bet_vault` opens."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "voided",
+            "docs": [
+              "Set by `void_bet_vault`: the resolver never showed up, so `claim_bet`",
+              "refunds every committer pro-rata to their stake instead of paying the",
+              "winning side."
+            ],
+            "type": "bool"
+          },
+          {
             "name": "bump",
             "type": "u8"
           },
@@ -4611,7 +4819,7 @@ export type PmAmm = {
             "type": {
               "array": [
                 "u8",
-                63
+                54
               ]
             }
           }

@@ -10,8 +10,9 @@ use anchor_spl::token::{Mint, Token, TokenAccount};
 
 use crate::errors::PmAmmError;
 use crate::state::{
-    BetVault, MAX_BET_ALLOWLIST, MAX_COMMIT_DURATION_SECS, MAX_MARKET_DURATION_SECS,
-    MIN_COMMIT_DURATION_SECS, MIN_MARKET_DURATION_SECS,
+    BetVault, DEFAULT_VOID_GRACE_SECS, MAX_BET_ALLOWLIST, MAX_COMMIT_DURATION_SECS,
+    MAX_MARKET_DURATION_SECS, MAX_VOID_GRACE_SECS, MIN_COMMIT_DURATION_SECS,
+    MIN_MARKET_DURATION_SECS, MIN_VOID_GRACE_SECS,
 };
 
 #[derive(Accounts)]
@@ -57,6 +58,7 @@ pub fn handler(
     lp_bps: u16,
     resolver: Pubkey,
     allowlist: Vec<Pubkey>,
+    void_grace_secs: i64,
 ) -> Result<()> {
     require!(
         !name.is_empty() && name.len() <= 64,
@@ -75,6 +77,16 @@ pub fn handler(
     require!(
         allowlist.len() <= MAX_BET_ALLOWLIST,
         PmAmmError::AllowlistTooLong
+    );
+    // 0 = the 7-day default; anything else must be inside the bounds.
+    let void_grace_secs = if void_grace_secs == 0 {
+        DEFAULT_VOID_GRACE_SECS
+    } else {
+        void_grace_secs
+    };
+    require!(
+        (MIN_VOID_GRACE_SECS..=MAX_VOID_GRACE_SECS).contains(&void_grace_secs),
+        PmAmmError::InvalidVoidGrace
     );
 
     let now = Clock::get()?.unix_timestamp;
@@ -97,6 +109,7 @@ pub fn handler(
     v.lp_bps = lp_bps;
     v.allowlist_len = allowlist.len() as u8;
     v.allowlist[..allowlist.len()].copy_from_slice(&allowlist);
+    v.void_grace_secs = void_grace_secs;
     v.bump = ctx.bumps.bet_vault;
 
     msg!(

@@ -336,6 +336,7 @@ function makeBetSend(
         lpBps: input.lpBps ?? 5000,
         resolver: input.resolver,
         allowlist: input.allowlist,
+        voidGraceSecs: input.voidGraceSecs,
         collateralMint,
       });
       const signature = await client.sendIxs([computeBudgetIx(CU.DEFAULT), ix]);
@@ -381,6 +382,19 @@ function makeBetSend(
       const { v, mint } = await vaultCollateral(betVault);
       const signer = client.walletPubkey();
       const ix = await client.ix.settleBetVault({
+        signer,
+        betVault,
+        market: v.market,
+        collateralMint: mint,
+      });
+      return client.sendIxs([computeBudgetIx(CU.DEFAULT), ix]);
+    },
+
+    /** Fallback: no resolution after `voidGraceSecs` → refund every stake. */
+    async voidBetVault(betVault: PublicKey) {
+      const { v, mint } = await vaultCollateral(betVault);
+      const signer = client.walletPubkey();
+      const ix = await client.ix.voidBetVault({
         signer,
         betVault,
         market: v.market,

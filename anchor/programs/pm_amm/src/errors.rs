@@ -113,4 +113,8 @@ pub enum PmAmmError {
     BetVaultNotSettled,
     #[msg("Bet vault already settled")]
     BetVaultAlreadySettled,
+    #[msg("void_grace_secs must be between 5 min and 30 days")]
+    InvalidVoidGrace,
+    #[msg("Void grace period has not elapsed yet")]
+    VoidTooEarly,
 }

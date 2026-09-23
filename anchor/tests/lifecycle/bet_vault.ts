@@ -46,6 +46,7 @@ const COMMIT_SECS = 60;
 const MARKET_SECS = 345; // launch needs market_end > now + 300
 const ONE = 1_000_000; // 1 USDC (6 dp)
 const DUST = 100; // raw units tolerated as rounding dust (0.0001 USDC)
+const VOID_GRACE = 300; // MIN_VOID_GRACE_SECS — the resolver's deadline
 const CU = ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -71,7 +72,7 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
 
   let usdcMint: PublicKey;
   let daoUsdc: PublicKey;
-  let alice: User, bob: User, carol: User, mallory: User;
+  let alice: User, bob: User, carol: User, mallory: User, dave: User;
   let nextId = Math.floor(Math.random() * 1e9) + 7_000_000_000;
   const bets: Record<string, Bet> = {};
   let commitEnd = 0; // latest commit deadline across every vault
@@ -178,7 +179,13 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
     assert.fail(`expected ${code}`);
   }
 
-  async function openBet(o: { lpBps: number; allowlist?: PublicKey[]; resolver?: PublicKey }) {
+  async function openBet(o: {
+    lpBps: number;
+    allowlist?: PublicKey[];
+    resolver?: PublicKey;
+    minTotal?: number;
+    voidGraceSecs?: number;
+  }) {
     const id = nextId++;
     const vault = betVaultPda(id);
     await m
@@ -187,10 +194,11 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
         `Bet ${id}`,
         new anchor.BN(COMMIT_SECS),
         new anchor.BN(MARKET_SECS),
-        new anchor.BN(ONE),
+        new anchor.BN(o.minTotal ?? ONE),
         o.lpBps,
         o.resolver ?? PublicKey.default,
         o.allowlist ?? [],
+        new anchor.BN(o.voidGraceSecs ?? 0),
       )
       .accountsPartial({
         authority: alice.kp.publicKey,
@@ -286,6 +294,21 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
       .resolveBetVault({ [side]: {} })
       .accountsPartial({ resolver: u.kp.publicKey, betVault: bet.vault, market: bet.market })
       .signers([u.kp])
+      .rpc();
+
+  const voidVault = (bet: Bet) =>
+    m
+      .voidBetVault()
+      .accountsPartial({
+        signer: provider.wallet.publicKey,
+        betVault: bet.vault,
+        market: bet.market,
+        marketVault: marketPdas(bet.market!).vault,
+        vaultCollateral: betCollateral(bet.vault),
+        vaultLpPosition: lpPda(bet.market!, bet.vault),
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .preInstructions([CU])
       .rpc();
 
   const settle = (bet: Bet) =>
@@ -528,27 +551,46 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
   before(async () => {
     usdcMint = await createMint(conn, payer, payer.publicKey, null, 6);
     daoUsdc = await ata(usdcMint, PROTOCOL_DAO);
-    [alice, bob, carol, mallory] = await Promise.all([mkUser(), mkUser(), mkUser(), mkUser()]);
+    [alice, bob, carol, mallory, dave] = await Promise.all([
+      mkUser(),
+      mkUser(),
+      mkUser(),
+      mkUser(),
+      mkUser(),
+    ]);
 
     // A: lp 0 (pure bet) — B: lp 50%, no trade — C: lp 50%, Carol right —
-    // D: lp 50%, Carol wrong — E: one-sided (refund path).
+    // D: lp 50%, Carol wrong — E: one-sided (refund path) — F: two bettors on
+    // the winning side (pro-rata + dust) — G: below min_total (refund path).
     for (const [k, lpBps] of [
       ["A", 0],
       ["B", 5000],
       ["C", 5000],
       ["D", 5000],
       ["E", 5000],
+      ["F", 5000],
     ] as const) {
       bets[k] = { vault: await openBet({ lpBps }) };
     }
+    bets.G = { vault: await openBet({ lpBps: 5000, minTotal: 100 * ONE }) };
+    // H: launched but never resolved — the void fallback (short grace so the
+    // suite can reach it).
+    bets.H = { vault: await openBet({ lpBps: 5000, voidGraceSecs: VOID_GRACE }) };
     for (const k of ["A", "B", "C", "D"]) {
       await commit(alice, bets[k].vault, "yes", 70);
       await commit(bob, bets[k].vault, "no", 30);
     }
     await commit(alice, bets.E.vault, "yes", 50);
+    // F: 40 + 30 on YES against 30 on NO — an odd pot (100) over an odd winning
+    // side (70), so the pro-rata split leaves dust for the last claim to sweep.
+    await commit(alice, bets.F.vault, "yes", 40);
+    await commit(dave, bets.F.vault, "yes", 30);
+    await commit(bob, bets.F.vault, "no", 30);
+    await commit(alice, bets.G.vault, "yes", 2); // below min_total = 100
+    await commit(alice, bets.H.vault, "yes", 70);
+    await commit(bob, bets.H.vault, "no", 30);
     marketEnd = (await accs.betVault.fetch(bets.A.vault)).marketEndTs.toNumber();
-    const last = await accs.betVault.fetch(bets.E.vault);
-    commitEnd = last.commitEndTs.toNumber();
+    commitEnd = (await accs.betVault.fetch(bets.G.vault)).commitEndTs.toNumber();
     lastEnd = (await accs.betVault.fetch(bets.D.vault)).marketEndTs.toNumber();
 
     await openRegularMarketAt70();
@@ -603,7 +645,8 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
   it("launch: a stranger can't launch; authority launches at the stake odds", async () => {
     await advanceChainTo(commitEnd + 1);
     await expectErr(launch(mallory, bets.B.vault), "Unauthorized");
-    for (const k of ["A", "B", "C", "D"]) bets[k].market = await launch(alice, bets[k].vault);
+    for (const k of ["A", "B", "C", "D", "F", "H"])
+      bets[k].market = await launch(alice, bets[k].vault);
 
     const b = await accs.betVault.fetch(bets.B.vault);
     const mk = await accs.market.fetch(bets.B.market!);
@@ -613,6 +656,12 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
     assert.equal(await bal(betCollateral(bets.B.vault)), 50 * ONE, "half kept in the vault");
     assert.equal(await bal(marketPdas(bets.B.market!).vault), 50 * ONE, "half as liquidity");
     assert.equal(await bal(marketPdas(bets.A.market!).vault), 0, "lp 0 → no liquidity");
+  });
+
+  it("below min_total: launch rejected, every committer refunded 1:1", async () => {
+    await expectErr(launch(alice, bets.G.vault), "VaultBelowMinTotal");
+    assert.equal(await claimBet(alice, bets.G.vault, "refundBet"), 2 * ONE);
+    assert.equal(await bal(betCollateral(bets.G.vault)), 0, "vault emptied");
   });
 
   it("one-sided vault: launch rejected, refund returns the stake 1:1", async () => {
@@ -633,12 +682,12 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
   it("resolution: stranger rejected, resolver resolves", async () => {
     await advanceChainTo(lastEnd + 1);
     await expectErr(resolveBet(mallory, bets.A, "yes"), "Unauthorized");
-    for (const k of ["A", "B", "C"]) await resolveBet(alice, bets[k], "yes");
+    for (const k of ["A", "B", "C", "F"]) await resolveBet(alice, bets[k], "yes");
     await resolveBet(alice, bets.D, "no");
     for (const market of [legacy.market!, legacy.vaultMarket!]) {
       await m.resolveMarket({ yes: {} }).accountsPartial({ signer: payer.publicKey, market }).rpc();
     }
-    for (const k of ["A", "B", "C", "D"]) await settle(bets[k]);
+    for (const k of ["A", "B", "C", "D", "F"]) await settle(bets[k]);
     await expectErr(settle(bets.A), "BetVaultAlreadySettled");
   });
 
@@ -670,6 +719,34 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
     assert.equal(await claimBet(alice, bets.D.vault), 0);
     assert.equal(await claimWinnings(carol, bets.D.market!), 0, "Carol's YES is worthless");
     assert.isAtMost(await bal(marketPdas(bets.D.market!).vault), DUST);
+  });
+
+  it("void is refused while the resolver still has time", async () => {
+    await expectErr(voidVault(bets.H), "VoidTooEarly");
+  });
+
+  it("void after the grace period: every stake is refunded, nothing left", async () => {
+    await advanceChainTo(lastEnd + VOID_GRACE + 2);
+    await voidVault(bets.H);
+    const v = await accs.betVault.fetch(bets.H.vault);
+    assert.equal(v.voided, true);
+    approx(v.payoutPool.toNumber(), 100, 0.01, "refund pool");
+    // No winner, no loser: both sides get their stake back.
+    approx(await claimBet(alice, bets.H.vault), 70, 0.01, "Alice");
+    approx(await claimBet(bob, bets.H.vault), 30, 0.01, "Bob");
+    assert.equal(await bal(betCollateral(bets.H.vault)), 0, "bet vault emptied");
+    assert.isAtMost(await bal(marketPdas(bets.H.market!).vault), DUST, "market emptied");
+  });
+
+  it("two bettors on the winning side split it pro-rata, last claim sweeps dust", async () => {
+    const pool = (await accs.betVault.fetch(bets.F.vault)).payoutPool.toNumber();
+    const a = await claimBet(alice, bets.F.vault); // 40 of the 70 winning stake
+    const d = await claimBet(dave, bets.F.vault); // 30 of it
+    assert.equal(await claimBet(bob, bets.F.vault), 0, "losing side");
+    approx(a, (pool * 4) / 7 / ONE, 0.01, "Alice 4/7");
+    approx(d, (pool * 3) / 7 / ONE, 0.01, "Dave 3/7");
+    assert.equal(a + d, pool, "the pool is fully distributed (dust swept)");
+    assert.equal(await bal(betCollateral(bets.F.vault)), 0, "nothing left");
   });
 
   it("regular deposits at 70%: both LPs recover their stake, market ≈ 0", async () => {

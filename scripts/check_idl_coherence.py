@@ -65,7 +65,7 @@ EXPECTED = {
         "commit_count", "min_total", "lp_bps", "effective_lp_bps",
         "allowlist_len", "allowlist", "launched", "price_bps", "market",
         "winning_side", "settled", "payout_pool", "claimed_stake", "paid_out",
-        "refunding", "bump", "_reserved",
+        "refunding", "void_grace_secs", "voided", "bump", "_reserved",
     ],
     "BetPosition": [
         "vault", "owner", "yes_amount", "no_amount", "bump", "_reserved",

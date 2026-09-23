@@ -714,6 +714,12 @@ impl CommitPositionGroup {
 /// Max committers on an allowlisted bet vault (1v1 = 2).
 pub const MAX_BET_ALLOWLIST: usize = 8;
 
+/// Bounds for `BetVault::void_grace_secs` — how long after the market expires
+/// the resolver has before anyone may void the vault and refund every stake.
+pub const MIN_VOID_GRACE_SECS: i64 = 300;
+pub const MAX_VOID_GRACE_SECS: i64 = 60 * 60 * 24 * 30; // 30 days
+pub const DEFAULT_VOID_GRACE_SECS: i64 = 60 * 60 * 24 * 7; // 7 days
+
 #[account]
 pub struct BetVault {
     pub authority: Pubkey,
@@ -753,8 +759,14 @@ pub struct BetVault {
     /// Set by the first `refund_bet`: the vault can then never launch, so a
     /// partial refund can't flip it back to launchable and trap the rest.
     pub refunding: bool,
+    /// Grace period after `market.end_ts` before `void_bet_vault` opens.
+    pub void_grace_secs: i64,
+    /// Set by `void_bet_vault`: the resolver never showed up, so `claim_bet`
+    /// refunds every committer pro-rata to their stake instead of paying the
+    /// winning side.
+    pub voided: bool,
     pub bump: u8,
-    pub _reserved: [u8; 63],
+    pub _reserved: [u8; 54],
 }
 
 impl BetVault {
@@ -785,8 +797,10 @@ impl BetVault {
         + 8  // claimed_stake
         + 8  // paid_out
         + 1  // refunding
+        + 8  // void_grace_secs
+        + 1  // voided
         + 1  // bump
-        + 63; // reserved
+        + 54; // reserved
 
     pub fn total(&self) -> u64 {
         self.yes_total.saturating_add(self.no_total)
@@ -828,6 +842,16 @@ impl BetVault {
             1 => self.yes_total,
             2 => self.no_total,
             _ => 0,
+        }
+    }
+
+    /// Stake that shares the payout pool, and this position's slice of it: the
+    /// winning side normally, everyone (pro-rata to total stake) once voided.
+    pub fn payout_basis(&self, position: &BetPosition) -> (u64, u64) {
+        if self.voided {
+            (position.total(), self.total())
+        } else {
+            (position.stake_on(self.winning_side), self.winning_total())
         }
     }
 
@@ -1485,6 +1509,27 @@ mod tests {
             pool,
             "sole winner takes all"
         );
+    }
+
+    #[test]
+    fn test_bet_payout_basis_winner_vs_voided() {
+        let mut v = bet_vault(70, 30, 5000);
+        let mut pos: BetPosition = unsafe { core::mem::zeroed() };
+        pos.yes_amount = 40;
+        pos.no_amount = 10;
+        // Resolved YES: only the YES stake counts, against the YES side total.
+        v.winning_side = 1;
+        assert_eq!(v.payout_basis(&pos), (40, 70));
+        // Voided: everyone is refunded pro-rata to their whole stake.
+        v.voided = true;
+        assert_eq!(v.payout_basis(&pos), (50, 100));
+        // A pure loser gets 0 when resolved, but is refunded when voided.
+        let mut loser: BetPosition = unsafe { core::mem::zeroed() };
+        loser.no_amount = 30;
+        v.voided = false;
+        assert_eq!(v.payout_basis(&loser).0, 0);
+        v.voided = true;
+        assert_eq!(v.payout_basis(&loser), (30, 100));
     }
 
     #[test]
