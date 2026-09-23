@@ -27,7 +27,7 @@ Read `CLAUDE.md` first for the canonical project state (deployments, sprint hist
 
 ## Swap fee (2%, 50% DAO / 50% creator)
 - `SWAP_FEE_BPS = 200` on the **USDC leg** of a swap: skimmed off the **input** on a buy (only the net backs the vault) and off the **curve output** on a sell. Pure YES↔NO swaps are fee-free.
-- Split 50% to the protocol DAO `HKLjYENZaFghSp2TM5VJad32wVu7d2XCMJZqKGTQ3ZeL` and 50% to the market creator (`market.authority`).
+- Split 50% to the protocol DAO `4qXyczAr5DuBVaHUwmZT5Xt6hgQ6RwqBYcFGtrv8QEph` and 50% to the market creator (`market.authority`).
 - `creator_usdc` is an **optional** account: when the swapper IS the creator it is passed as `null` (they keep their share), which also avoids an Anchor `ConstraintDuplicateMutableAccount` error. The DAO key is off-curve → ATA derivation uses `allowOwnerOffCurve`.
 - The fee does **not** accrue to LPs; the post-trade solvency guard still holds (checked against the real vault balance).
 

@@ -1,6 +1,7 @@
 # Sprint 25 — Bet Vault v2 + entry-side surplus fix
 
-Branch `feat/bet-vault-v2`. Nothing deployed: localnet only, pending Ewan's go.
+Merged in `sparkfun-labs/pm-amm#1`. Live on devnet and mainnet (`GV1F…N16y`)
+since 2026-09-23 — mainnet upgrade in slot 449755892, same `.so` as devnet.
 
 Source: Mathis's handoff (2026-09-22), reproduced on the live program with a
 local validator. Two independent pieces, in dependency order.
@@ -186,6 +187,5 @@ lifecycle suite. The SDK's `simulateLpDeposit` mirrors the new minting.
    `claim_committer_group` still mints leg YES 1:1 and moves the backing into
    that leg's market vault, so a losing leg's USDC has no token to claim it.
    Not touched here — flagged for its own fix.
-5. **Program size**: the build is now ~1.50 MB against the 1.4 MB deployed on
-   mainnet, so a mainnet upgrade would need `solana program extend` (~0.7 SOL
-   more rent) before the deploy.
+5. ~~**Program size**~~ — done: mainnet program data extended to 1,550,000
+   bytes (+150,000, tx fee only) before the 2026-09-23 upgrade.
