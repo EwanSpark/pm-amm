@@ -258,7 +258,7 @@ mapAnchorError(err: unknown): { code: number; name: string; msg?: string } | nul
 
 import { METAPLEX_PROGRAM_ID, SYSVAR_RENT_PUBKEY, CU, SEEDS, PROTOCOL_DAO, SWAP_FEE_BPS, solscanTxUrl, solscanAccountUrl } from "@pm-amm/sdk";
 // CU = { DEFAULT: 400000, HEAVY: 1400000 }
-// SWAP_FEE_BPS = 200 (2%); PROTOCOL_DAO = HKLjYENZaFghSp2TM5VJad32wVu7d2XCMJZqKGTQ3ZeL (50% of the fee; creator gets the other 50%)
+// SWAP_FEE_BPS = 200 (2%); PROTOCOL_DAO = 4qXyczAr5DuBVaHUwmZT5Xt6hgQ6RwqBYcFGtrv8QEph (50% of the fee; creator gets the other 50%)
 // solscanTxUrl(sig, cluster?) / solscanAccountUrl(addr, cluster?)  cluster default "devnet"
 ```
 

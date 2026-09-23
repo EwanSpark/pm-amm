@@ -23,8 +23,26 @@ change** — only configuration + a deploy.
 | Program ID | `GV1FMGHRYBjQLaghE5fnGuYCuCcpdt3GD5xEX3TwN16y` |
 | Upgrade authority | `2TBg1fasPKnBczbtJpvD6LmEUxNnCoigTDQHB3VnUpv7` (dedicated mainnet key) |
 | Collateral | real USDC `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` |
-| Deploy mode | `--max-len 1400000` (~9.75 SOL rent, recoverable) |
+| Protocol DAO (50% of the swap fee) | `4qXyczAr5DuBVaHUwmZT5Xt6hgQ6RwqBYcFGtrv8QEph` (since the Sprint 25 upgrade; was `HKLj…3ZeL`) |
+| Program data | 1,550,000 bytes (first deploy `--max-len 1400000`, extended +150,000 on 2026-09-23) |
 | On-chain IDL | deferred (optional — `anchor idl` lacks priority fees, congestion-blocked) |
+
+### Upgrade log
+
+| Date | Change | Slot / tx |
+|---|---|---|
+| 2026-09-23 | Sprint 25 (`sparkfun-labs/pm-amm#1`): entry-side surplus fix, Bet Vault v2, swap creator-fee fix, LP shares ∝ L_0, new protocol DAO. `.so` SHA-256 `5106fe71…` (identical to devnet) | slot 449755892, tx `49bmXfGR…FYNR6Z2` |
+
+Upgrade notes (Sprint 25):
+- The `.so` (1,513,072 bytes) outgrew the 1,400,000-byte account, so
+  `solana program extend GV1F… 150000` ran first. It cost only the tx fee: the
+  account already held more lamports than the new size's rent.
+- An upgrade stages the whole `.so` in a buffer (~7.7 SOL of rent, refunded on
+  success). The authority needs that much free SOL before the deploy.
+- `MAINNET_MAX_LEN` only applies to the first deploy; an upgrade reuses the
+  existing account size (extend it if the new `.so` is bigger).
+- The protocol DAO is compiled in: every client must pass the NEW DAO's ATA from
+  the upgrade on (`@pm-amm/sdk` from this repo does; npm `0.1.0` is stale).
 
 The steps below are the reproducible procedure (and apply to future **upgrades** —
 same `pnpm run deploy:mainnet`, which reuses the program ID).
@@ -35,7 +53,7 @@ same `pnpm run deploy:mainnet`, which reuses the program ID).
 
 ```bash
 pnpm run build          # produces anchor/target/deploy/pm_amm.so (+ IDL/types)
-pnpm run test:rust      # 73 unit tests must be green
+pnpm run test:rust      # 84 unit tests must be green
 ```
 
 ## 2. Create + fund the mainnet authority key

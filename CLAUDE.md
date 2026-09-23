@@ -20,7 +20,9 @@ Full guide: `MAINNET.md`. Key facts:
 - **Program deployed** at `GV1FMGHRYBjQLaghE5fnGuYCuCcpdt3GD5xEX3TwN16y` (same ID as devnet — `declare_id!` compiled in, clusters isolated).
 - **Upgrade authority**: `2TBg1fasPKnBczbtJpvD6LmEUxNnCoigTDQHB3VnUpv7` (dedicated mainnet key — NOT the devnet `6NG87…`). Single-key.
 - **Real USDC**: `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` (Circle, 6 decimals).
-- Deployed with `MAINNET_MAX_LEN=1400000` (~9.75 SOL rent, recoverable). On-chain IDL deferred (account `E4Fm…` partial, ~0.064 SOL parked; `anchor idl` lacks priority fees → congestion-blocked).
+- **Protocol DAO** (50% of the swap fee): `4qXyczAr5DuBVaHUwmZT5Xt6hgQ6RwqBYcFGtrv8QEph`, compiled into `swap.rs` (was `HKLj…` before the Sprint 25 upgrade).
+- **Sprint 25 upgrade LIVE** (2026-09-23, slot 449755892): surplus fix + Bet Vault v2 + swap creator-fee fix + LP shares ∝ L_0 + new DAO. Same `.so` as devnet (SHA-256 `5106fe71…`).
+- First deployed with `MAINNET_MAX_LEN=1400000`; program data extended to **1,550,000 bytes** for Sprint 25 (an upgrade needs `solana program extend` whenever the `.so` outgrows it, plus ~7.7 SOL free on the authority for the buffer, refunded). On-chain IDL deferred (account `E4Fm…` partial, ~0.064 SOL parked; `anchor idl` lacks priority fees → congestion-blocked).
 - Deploy/upgrade: `MAINNET_RPC_URL=… MAINNET_AUTHORITY_KEYPAIR=… [MAINNET_MAX_LEN=1400000] pnpm run deploy:mainnet` (interactive confirm). **Needs a dedicated RPC** (public rate-limits the writes); the script passes `--use-rpc` + a priority fee (mainnet congestion → "Max retries" otherwise).
 - Front (Vercel prod env): `app/.env.mainnet.example` → `NEXT_PUBLIC_SOLANA_CLUSTER=mainnet-beta`, the program ID, the real USDC, a dedicated RPC. **Never set `MINT_AUTHORITY_KEY`** — faucet is hard-disabled on mainnet (UI hidden + API 503).
 - Program is collateral-agnostic (mints only YES/NO, never USDC) → no on-chain change for real USDC.
@@ -161,8 +163,9 @@ when it is, a follow-up sprint can adapt leg seeding to use `mint_pair` instead 
 
 ## Current Sprint
 
-Sprint 25 (branch `feat/bet-vault-v2`, NOT deployed) — Bet Vault v2 + entry-side
-surplus fix. Spec + open items: `doc/bet-vault-v2.md`.
+Sprint 25 (merged: `sparkfun-labs/pm-amm#1`; **live on devnet and mainnet** since
+2026-09-23) — Bet Vault v2 + entry-side surplus fix. Spec + open items:
+`doc/bet-vault-v2.md`.
 - **Surplus fix**: calibrating `max(x, y) = deposit` locked collateral that no
   token could claim (73.37 USDC per 100 deposited at 70%). It is now credited as
   `LpPosition::excess_*` / `Market::unclaimed_excess_*` (carved from padding, so
