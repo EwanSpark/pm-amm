@@ -1,6 +1,6 @@
 {
   "name": "@pm-amm/sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "TypeScript SDK for the pm-AMM Solana program — prediction markets, commitment vaults, and multi-outcome groups (Paradigm dynamic pm-AMM).",
   "license": "MIT",
   "type": "module",
