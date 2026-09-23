@@ -66,9 +66,10 @@ jobs:
 
       - name: Install anchor test deps
         # `anchor/` is outside the pnpm workspace (own lockfile), so the root
-        # install doesn't bring ts-mocha / chai.
+        # install doesn't bring ts-mocha / chai — and without
+        # --ignore-workspace pnpm walks up and reinstalls the root workspace.
         working-directory: anchor
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-workspace
 
       - name: Generate local wallet
         run: |
