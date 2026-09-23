@@ -216,7 +216,14 @@ pub fn handler(
                     v,
                 ),
             };
-            let obligation = post_ys.saturating_add(rx).max(post_ns.saturating_add(ry));
+            // Unminted entry-side surplus owed to LPs is part of the obligation.
+            let owed_y = post_ys
+                .saturating_add(rx)
+                .saturating_add(market.unclaimed_excess_yes);
+            let owed_n = post_ns
+                .saturating_add(ry)
+                .saturating_add(market.unclaimed_excess_no);
+            let obligation = owed_y.max(owed_n);
             require!(post_vault >= obligation, PmAmmError::InsufficientVault);
         }
 
@@ -237,7 +244,14 @@ pub fn handler(
     let creator_cut = total_fee - dao_cut;
 
     // Validate the optional creator fee account (absent => swapper is the
-    // creator, who keeps their own share).
+    // creator, who keeps their own share). Absent is ONLY allowed for the
+    // creator: otherwise any swapper could omit it and keep the creator half.
+    if ctx.accounts.creator_usdc.is_none() {
+        require!(
+            ctx.accounts.signer.key() == ctx.accounts.market.authority,
+            PmAmmError::Unauthorized
+        );
+    }
     if let Some(creator) = ctx.accounts.creator_usdc.as_ref() {
         require!(
             creator.owner == ctx.accounts.market.authority,

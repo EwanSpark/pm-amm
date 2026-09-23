@@ -7,7 +7,7 @@ use fixed::types::I80F48;
 use crate::accrual;
 use crate::errors::PmAmmError;
 use crate::pm_math;
-use crate::state::{LpPosition, Market};
+use crate::state::{deposit_excess, LpPosition, Market};
 
 #[derive(Accounts)]
 pub struct DepositLiquidity<'info> {
@@ -58,6 +58,8 @@ pub fn handler(ctx: Context<DepositLiquidity>, amount: u64) -> Result<()> {
 
     // --- Phase 1: Mutations on market (scoped borrow) ---
     let new_shares: I80F48;
+    // Entry-side surplus fix: tokens this deposit backs but the pool won't hold.
+    let (excess_yes, excess_no): (u64, u64);
     {
         let market = &mut ctx.accounts.market;
         require!(!market.resolved, PmAmmError::MarketAlreadyResolved);
@@ -81,6 +83,7 @@ pub fn handler(ctx: Context<DepositLiquidity>, amount: u64) -> Result<()> {
             let (x, y) = pm_math::reserves_from_price(target_price, l_eff)?;
 
             new_shares = amount_fixed;
+            (excess_yes, excess_no) = deposit_excess(amount, x, y);
             market.set_l_zero_fixed(l_zero);
             market.set_reserve_yes_fixed(x);
             market.set_reserve_no_fixed(y);
@@ -107,6 +110,11 @@ pub fn handler(ctx: Context<DepositLiquidity>, amount: u64) -> Result<()> {
 
             new_shares = amount_fixed;
             let new_total = total_shares + new_shares;
+            (excess_yes, excess_no) = deposit_excess(
+                amount,
+                x - market.reserve_yes_fixed(),
+                y - market.reserve_no_fixed(),
+            );
 
             market.set_l_zero_fixed(new_l_zero);
             market.set_reserve_yes_fixed(x);
@@ -176,6 +184,7 @@ pub fn handler(ctx: Context<DepositLiquidity>, amount: u64) -> Result<()> {
 
     lp.shares = (old_shares + new_shares).to_bits() as u128;
     lp.collateral_deposited = lp.collateral_deposited.saturating_add(amount);
+    lp.credit_excess(&mut ctx.accounts.market, excess_yes, excess_no);
 
     Ok(())
 }

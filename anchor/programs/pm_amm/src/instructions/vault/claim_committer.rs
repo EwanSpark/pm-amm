@@ -92,6 +92,12 @@ pub fn handler(ctx: Context<ClaimCommitter>) -> Result<()> {
     lp.collateral_deposited = total;
     lp.yes_per_share_checkpoint = 0;
     lp.no_per_share_checkpoint = 0;
+    // Pro-rata slice of the launch's entry-side surplus. The market already
+    // counts the whole launch surplus as unclaimed, so only the position is
+    // credited here (flooring leaves dust counted, never over-credited).
+    let pro_rata = |x: u64| ((x as u128) * (total as u128) / (vault.total() as u128)) as u64;
+    lp.excess_yes = pro_rata(vault.launch_excess_yes);
+    lp.excess_no = pro_rata(vault.launch_excess_no);
 
     position.claimed = true;
     msg!(

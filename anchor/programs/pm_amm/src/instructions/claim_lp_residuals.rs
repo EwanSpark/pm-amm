@@ -1,4 +1,4 @@
-//! Claim pending YES+NO residuals for an LP position.
+//! Claim pending YES+NO residuals (+ entry-side surplus) for an LP position.
 //! Intentionally allowed post-resolution and post-expiration:
 //! LPs must be able to claim accrued residuals at any time.
 
@@ -73,8 +73,16 @@ pub fn handler(ctx: Context<ClaimLpResiduals>) -> Result<()> {
             market.cum_no_per_share_fixed(),
         );
 
-        yes_u64 = pending_yes.max(I80F48::ZERO).to_num::<u64>();
-        no_u64 = pending_no.max(I80F48::ZERO).to_num::<u64>();
+        // Entry-side surplus (fix): minted alongside the dC_t residuals.
+        let (excess_yes, excess_no) = lp.take_excess(market);
+        yes_u64 = pending_yes
+            .max(I80F48::ZERO)
+            .to_num::<u64>()
+            .saturating_add(excess_yes);
+        no_u64 = pending_no
+            .max(I80F48::ZERO)
+            .to_num::<u64>()
+            .saturating_add(excess_no);
 
         require!(yes_u64 > 0 || no_u64 > 0, PmAmmError::NoResidualsToClaim);
 
