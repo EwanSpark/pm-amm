@@ -113,7 +113,7 @@ creator half is the bet vault's LP compensation.
 
 - Rust unit: surplus helpers, odds validity, LP cap (floor ≥ stake for both
   sides across the price range), payout dust sweep, allowlist, account sizes.
-- `anchor/tests/lifecycle/bet_vault.ts` (19 tests): the handoff's acceptance
+- `anchor/tests/lifecycle/bet_vault.ts` (21 tests): the handoff's acceptance
   criteria end-to-end, including "market vault ≈ 0 after all claims" for a
   regular 70% deposit and for a legacy vault launched at 70%, two bettors
   splitting the winning side pro-rata (last claim sweeps the dust), a refund
@@ -156,13 +156,24 @@ Carol buys 20 USDC of YES, YES wins) on
 Matches the simulator (≈ 94 for Alice) and the localnet suite. Note the public
 devnet RPC rate-limits hard — the script retries with backoff.
 
-### Rounding drift between LPs (measured, not a solvency issue)
+### LP shares are minted ∝ the L_0 a deposit adds (dilution fix)
 
-Two deposits on the same 70% market (100 then 50) pay out 100.039 + 49.961 =
-150.000: conserved to the lamport, with ~0.03% of the later deposit ending up
-with the earlier LP (fixed-point rounding in the `L_0` increment). The drift is
-always in that direction; the opposite one is what would under-collateralize
-the pool. Asserted in the lifecycle suite.
+Found in the audit, reproduced on-chain, then fixed. `deposit_liquidity` used to
+mint 1 share per USDC on a follow-up deposit. That is only fair while the pool
+holds exactly 1 USDC of max-side backing per share, and any trade breaks it:
+after Carol buys 20 USDC of YES on a 50-USDC pot, the pool holds ~69.6 NO for 50
+shares. A deposit + immediate withdraw then took a pro-rata slice of that NO
+pile. Before the surplus fix the round-trip lost its surplus, so it was
+unprofitable. With the fix it became a free extraction: Mallory put in 900,
+got back 901.83 YES plus a free slice of the NO pile, and Bob's winning pot
+fell from ≈119.8 to 101.77.
+
+Shares are now `total_shares × ΔL_0 / L_0` (`shares_for_l_zero_increment`),
+floored. L_0 per share never changes (withdraw burns both pro-rata, accrual
+leaves L_0 alone), so every LP's slice of the reserves is exactly what they
+added. The old ~0.03% drift between two LPs on the same market is gone too:
+each gets their deposit back to the rounding dust. Both are asserted in the
+lifecycle suite. The SDK's `simulateLpDeposit` mirrors the new minting.
 
 ## Open / deferred
 

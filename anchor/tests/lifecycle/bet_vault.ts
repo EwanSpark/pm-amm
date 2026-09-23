@@ -561,7 +561,8 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
 
     // A: lp 0 (pure bet) — B: lp 50%, no trade — C: lp 50%, Carol right —
     // D: lp 50%, Carol wrong — E: one-sided (refund path) — F: two bettors on
-    // the winning side (pro-rata + dust) — G: below min_total (refund path).
+    // the winning side (pro-rata + dust) — G: below min_total (refund path) —
+    // I: like D, plus Mallory's deposit + withdraw round-trip (LP dilution).
     for (const [k, lpBps] of [
       ["A", 0],
       ["B", 5000],
@@ -569,6 +570,7 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
       ["D", 5000],
       ["E", 5000],
       ["F", 5000],
+      ["I", 5000],
     ] as const) {
       bets[k] = { vault: await openBet({ lpBps }) };
     }
@@ -576,7 +578,7 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
     // H: launched but never resolved — the void fallback (short grace so the
     // suite can reach it).
     bets.H = { vault: await openBet({ lpBps: 5000, voidGraceSecs: VOID_GRACE }) };
-    for (const k of ["A", "B", "C", "D"]) {
+    for (const k of ["A", "B", "C", "D", "I"]) {
       await commit(alice, bets[k].vault, "yes", 70);
       await commit(bob, bets[k].vault, "no", 30);
     }
@@ -645,7 +647,7 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
   it("launch: a stranger can't launch; authority launches at the stake odds", async () => {
     await advanceChainTo(commitEnd + 1);
     await expectErr(launch(mallory, bets.B.vault), "Unauthorized");
-    for (const k of ["A", "B", "C", "D", "F", "H"])
+    for (const k of ["A", "B", "C", "D", "F", "H", "I"])
       bets[k].market = await launch(alice, bets[k].vault);
 
     const b = await accs.betVault.fetch(bets.B.vault);
@@ -677,6 +679,43 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
     await launchAndClaimLegacy();
   });
 
+  it("LP dilution: a deposit + immediate withdraw can't skim the pot", async () => {
+    // After Carol's buy the pool holds more NO than the vault's shares were
+    // minted for. With shares minted 1:1 per USDC, Mallory's round-trip got a
+    // pro-rata slice of that NO pile on top of her own surplus: ~+2 free pairs
+    // and ~+16 free NO, taken from the pot. Shares ∝ the L_0 she adds → none.
+    const market = bets.I.market!;
+    const p = marketPdas(market);
+    await buy(carol, market, "yes", 20, betCollateral(bets.I.vault));
+    const usd = 900;
+    await deposit(mallory, market, usd);
+    const lp = await accs.lpPosition.fetch(lpPda(market, mallory.kp.publicKey));
+    const userYes = await ata(p.yesMint, mallory.kp.publicKey);
+    const userNo = await ata(p.noMint, mallory.kp.publicKey);
+    await m
+      .withdrawLiquidity(lp.shares)
+      .accountsPartial({
+        signer: mallory.kp.publicKey,
+        market,
+        collateralMint: usdcMint,
+        yesMint: p.yesMint,
+        noMint: p.noMint,
+        lpPosition: lpPda(market, mallory.kp.publicKey),
+        userYes,
+        userNo,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .preInstructions([CU])
+      .signers([mallory.kp])
+      .rpc();
+    const [yes, no] = [await bal(userYes), await bal(userNo)];
+    // She gets back what she put in — `usd` of each side — and not a lamport more.
+    assert.isAtMost(yes, usd * ONE, `YES back: ${yes / ONE}`);
+    assert.isAtMost(no, usd * ONE, `NO back: ${no / ONE}`);
+    approx(yes, usd, 0.01, "YES back");
+    approx(no, usd, 0.01, "NO back");
+  });
+
   // ------------------------------------------------------ resolve & settle
 
   it("resolution: stranger rejected, resolver resolves", async () => {
@@ -684,10 +723,11 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
     await expectErr(resolveBet(mallory, bets.A, "yes"), "Unauthorized");
     for (const k of ["A", "B", "C", "F"]) await resolveBet(alice, bets[k], "yes");
     await resolveBet(alice, bets.D, "no");
+    await resolveBet(alice, bets.I, "no");
     for (const market of [legacy.market!, legacy.vaultMarket!]) {
       await m.resolveMarket({ yes: {} }).accountsPartial({ signer: payer.publicKey, market }).rpc();
     }
-    for (const k of ["A", "B", "C", "D", "F"]) await settle(bets[k]);
+    for (const k of ["A", "B", "C", "D", "F", "I"]) await settle(bets[k]);
     await expectErr(settle(bets.A), "BetVaultAlreadySettled");
   });
 
@@ -719,6 +759,14 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
     assert.equal(await claimBet(alice, bets.D.vault), 0);
     assert.equal(await claimWinnings(carol, bets.D.market!), 0, "Carol's YES is worthless");
     assert.isAtMost(await bal(marketPdas(bets.D.market!).vault), DUST);
+  });
+
+  it("after Mallory's round-trip, Bob's pot is intact (≈ 119.8, same as D)", async () => {
+    approx(await claimBet(bob, bets.I.vault), 119.8, 0.5, "Bob");
+    assert.equal(await claimBet(alice, bets.I.vault), 0);
+    approx(await claimWinnings(mallory, bets.I.market!), 900, 0.01, "Mallory: her 900 NO");
+    assert.equal(await claimWinnings(carol, bets.I.market!), 0, "Carol's YES is worthless");
+    assert.isAtMost(await bal(marketPdas(bets.I.market!).vault), DUST);
   });
 
   it("void is refused while the resolver still has time", async () => {
@@ -754,14 +802,12 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
     const first = await claimWinnings(owner, legacy.market!);
     await claimResiduals(carol, legacy.market!);
     const second = await claimWinnings(carol, legacy.market!);
-    // 150 deposited, 150 paid out: nothing is created or stranded. The split
-    // drifts by ~0.03% of the later deposit (fixed-point rounding in the L_0
-    // increment leaves that much with the earlier LP) — never the other way,
-    // which is what would under-collateralize the pool.
-    approx(first + second, 150, 0.01, "both LPs");
-    approx(first, 100, 0.1, "first LP");
-    approx(second, 50, 0.1, "second LP");
-    assert.isAtLeast(first, 100 * ONE, "earlier LP is never short");
+    // 150 deposited, 150 paid out: nothing is created or stranded. Shares are
+    // minted ∝ the L_0 each deposit adds, so each LP gets their own deposit
+    // back to the rounding dust (flooring keeps it in the vault, never over).
+    assert.isAtMost(first + second, 150 * ONE, "never more than deposited");
+    assert.isAtMost(Math.abs(first - 100 * ONE), DUST, `first LP: ${first / ONE}`);
+    assert.isAtMost(Math.abs(second - 50 * ONE), DUST, `second LP: ${second / ONE}`);
     assert.isAtMost(await bal(marketPdas(legacy.market!).vault), DUST);
   });
 

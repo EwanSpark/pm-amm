@@ -6,6 +6,8 @@
 use anchor_lang::prelude::*;
 use fixed::types::I80F48;
 
+use crate::errors::PmAmmError;
+
 // ============================================================================
 // Side enum
 // ============================================================================
@@ -270,6 +272,29 @@ pub fn deposit_excess(amount: u64, dx: I80F48, dy: I80F48) -> (u64, u64) {
     let a = I80F48::from_num(amount);
     let side = |d: I80F48| (a - d).max(I80F48::ZERO).to_num::<u64>();
     (side(dx), side(dy))
+}
+
+/// LP shares minted by a follow-up deposit that adds `l_zero_increment` to a
+/// pool of `total_shares` over `old_l_zero`: proportional to the L_0 it adds,
+/// so the L_0 backing each share (and thus every LP's slice of the reserves)
+/// is unchanged. NOT 1 share per USDC: once trades skew the pool, its max
+/// reserve per share drifts from 1 and 1:1 minting let a deposit + immediate
+/// withdraw skim the existing LPs. Floored (favours existing LPs).
+pub fn shares_for_l_zero_increment(
+    total_shares: I80F48,
+    old_l_zero: I80F48,
+    l_zero_increment: I80F48,
+) -> Result<I80F48> {
+    require!(old_l_zero > I80F48::ZERO, PmAmmError::InsufficientLiquidity);
+    // Multiply first for precision; fall back to ratio-first on overflow.
+    let shares = match total_shares.checked_mul(l_zero_increment) {
+        Some(p) => p / old_l_zero,
+        None => total_shares
+            .checked_mul(l_zero_increment / old_l_zero)
+            .ok_or(PmAmmError::MathOverflow)?,
+    };
+    require!(shares > I80F48::ZERO, PmAmmError::InvalidBudget);
+    Ok(shares)
 }
 
 // ============================================================================
@@ -1446,6 +1471,28 @@ mod tests {
         assert_eq!((lp.excess_yes, lp.excess_no), (0, 0));
         assert_eq!((m.unclaimed_excess_yes, m.unclaimed_excess_no), (0, 0));
         assert_eq!(lp.take_excess(&mut m), (0, 0), "second take is a no-op");
+    }
+
+    #[test]
+    fn test_follow_up_shares_keep_l_zero_per_share() {
+        let f = |v: f64| I80F48::from_num(v);
+        // Doubling L_0 doubles the shares, whatever USDC it took to add it.
+        let s = shares_for_l_zero_increment(f(50e6), f(1_000.0), f(1_000.0)).unwrap();
+        assert_eq!(s, f(50e6));
+        // L_0 per share is preserved (floored: the depositor never gets more).
+        let (total, l0, inc) = (f(123_456_789.0), f(3_141.5), f(27.18));
+        let s = shares_for_l_zero_increment(total, l0, inc).unwrap();
+        let before: f64 = (l0 / total).to_num();
+        let after: f64 = ((l0 + inc) / (total + s)).to_num();
+        assert!(
+            (after - before).abs() / before < 1e-12,
+            "{before} vs {after}"
+        );
+        assert!(s <= total * inc / l0);
+        // Huge pools take the overflow-safe path instead of failing.
+        let big = shares_for_l_zero_increment(f(4e23), f(1e10), f(1e9)).unwrap();
+        assert!((big.to_num::<f64>() / 4e22 - 1.0).abs() < 1e-9);
+        assert!(shares_for_l_zero_increment(f(1.0), I80F48::ZERO, f(1.0)).is_err());
     }
 
     fn bet_vault(yes: u64, no: u64, lp_bps: u16) -> BetVault {

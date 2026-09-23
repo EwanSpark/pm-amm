@@ -7,7 +7,7 @@ use fixed::types::I80F48;
 use crate::accrual;
 use crate::errors::PmAmmError;
 use crate::pm_math;
-use crate::state::{deposit_excess, LpPosition, Market};
+use crate::state::{deposit_excess, shares_for_l_zero_increment, LpPosition, Market};
 
 #[derive(Accounts)]
 pub struct DepositLiquidity<'info> {
@@ -92,8 +92,9 @@ pub fn handler(ctx: Context<DepositLiquidity>, amount: u64) -> Result<()> {
             // Follow-up deposit: keep the current price, and add backing for
             // `amount` USDC at the worst-case side (fix #1). L_0 is linear in the
             // budget, so the same calibration yields the L_0 *increment*. Shares
-            // are denominated 1:1 in USDC of backing, so `vault == total_lp_shares`
-            // holds by construction and the pool stays fully collateralized.
+            // are minted in proportion to that increment (see
+            // `shares_for_l_zero_increment`), NOT 1 per USDC — the pool's
+            // backing per share drifts from 1 as soon as trades skew it.
             let l_eff = market.l_effective(now)?;
             let price = pm_math::price_from_reserves(
                 market.reserve_yes_fixed(),
@@ -108,7 +109,8 @@ pub fn handler(ctx: Context<DepositLiquidity>, amount: u64) -> Result<()> {
             let new_l_eff = pm_math::l_effective(new_l_zero, time_remaining)?;
             let (x, y) = pm_math::reserves_from_price(price, new_l_eff)?;
 
-            new_shares = amount_fixed;
+            new_shares =
+                shares_for_l_zero_increment(total_shares, market.l_zero_fixed(), l_zero_increment)?;
             let new_total = total_shares + new_shares;
             (excess_yes, excess_no) = deposit_excess(
                 amount,

@@ -75,16 +75,16 @@ cd oracle && python3 test_properties.py    # 18 tests (paper properties A-G)
 
 | Suite | Count | Run with |
 |---|---|---|
-| Rust unit | **83** | `pnpm run test:rust` |
+| Rust unit | **84** | `pnpm run test:rust` |
 | TS integration — `pm_amm.ts` (binary lifecycle) | **20** | `pnpm run test` (localnet) |
 | TS integration — `group_market.ts` (5 group ix) | **22** | (same) |
 | TS integration — `access_control.ts` | **6** | (same) |
 | TS integration — `vault.ts` (Sprint 22 commit vault) | **9** | (same) |
 | TS integration — `vault_group.ts` (Sprint 23 multi-outcome vault) | **9** | (same) |
-| TS integration — `lifecycle/bet_vault.ts` (Sprint 25 bet vault + surplus fix) | **19** | (same) |
+| TS integration — `lifecycle/bet_vault.ts` (Sprint 25 bet vault + surplus fix) | **21** | (same) |
 | Python oracle | **112** | `python3 oracle/test_oracle.py` |
 | Python properties | **18** | `python3 oracle/test_properties.py` |
-| **Total (Rust + TS + Python)** | **298** | (collected manually) |
+| **Total (Rust + TS + Python)** | **301** | (collected manually) |
 
 `anchor test` runs **surfpool**, not `solana-test-validator`: blocks (and the
 clock) advance per transaction, not with wall time. So `tests/lifecycle/*.ts`
