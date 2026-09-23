@@ -11,7 +11,7 @@ Built for the $PREDICT hackathon. Deadline: April 26, 2026.
 - **Program ID**: `GV1FMGHRYBjQLaghE5fnGuYCuCcpdt3GD5xEX3TwN16y`
 - **USDC mock mint**: `3WQ8hCqTNwjrh8WzE2XyoZoUrd1miPcwWfMkmFPUMEWZ` (6 decimals, mint authority = `6NG87…`) — unchanged across redeploys (the mint is independent of the program ID)
 - **Upgrade authority**: `6NG87yZrQw6zH6Au8fHbYcD7Dken5smAzisLeXazpt8E` (single-key — move to multisig before mainnet)
-- **TS SDK**: `@pm-amm/sdk` (`packages/sdk`) — wraps all 33 instructions + PDAs + reads + math; the front consumes it.
+- **TS SDK**: `@pm-amm/sdk` (`packages/sdk`) — wraps all 34 instructions + PDAs + reads + math; the front consumes it.
 - **Deployer/faucet keypair**: `~/.config/solana/id.json` (= upgrade + mint authority). `pnpm run deploy` deploys/upgrades via the program keypair `anchor/target/deploy/pm_amm-keypair.json` (the prior B1fu keypair is backed up at `pm_amm-keypair.B1fu.bak.json`).
 
 ## Mainnet (LIVE)

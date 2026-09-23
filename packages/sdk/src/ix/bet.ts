@@ -1,5 +1,5 @@
 /**
- * Instruction builders for the 7 Bet Vault v2 instructions ("winner takes the
+ * Instruction builders for the 8 Bet Vault v2 instructions ("winner takes the
  * pot, the pot is the liquidity"). Collateral defaults to `ctx.collateralMint`;
  * pass the vault's own mint for any-token vaults.
  */

@@ -76,7 +76,7 @@ export class PmAmmClient {
   readonly ctx: IxContext;
   private readonly provider?: AnchorProvider;
 
-  /** Composable instruction builders (no signing) for all 33 instructions. */
+  /** Composable instruction builders (no signing) for all 34 instructions. */
   readonly ix: BoundIx;
   /** Convenience send wrappers (require a provider). */
   readonly send: SendApi;
