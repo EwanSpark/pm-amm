@@ -6,6 +6,8 @@
 use anchor_lang::prelude::*;
 use fixed::types::I80F48;
 
+use crate::errors::PmAmmError;
+
 // ============================================================================
 // Side enum
 // ============================================================================
@@ -79,15 +81,23 @@ pub struct Market {
     // gated on (group.resolved || group.winning_leg == NO_WINNING_LEG)
     // would be the right shape — left out for the hackathon scope.
     pub group: Pubkey,
+
+    // EXTENSION (entry-side surplus fix): tokens that LPs' deposits back but the
+    // pool does not hold. Calibrating `max(x, y) = deposit` (fix #1) locks
+    // `deposit` USDC for `x` YES + `y` NO, so `deposit - x` YES (or `- y` NO) is
+    // owed to the depositor. Credited to `LpPosition::excess_*` and minted
+    // lazily on claim/withdraw; counted in the swap solvency guard until then.
+    pub unclaimed_excess_yes: u64,
+    pub unclaimed_excess_no: u64,
 }
 
 impl Market {
     pub const SEED: &'static [u8] = b"market";
 
     /// Space: 8 discriminator + fields + padding.
-    /// Total stays at 443 bytes — `initial_price_bps` (2) + `group` (32) fit
-    /// in the previously-reserved 64-byte tail, leaving 30 bytes of padding
-    /// for future expansion.
+    /// Total stays at 443 bytes — `initial_price_bps` (2) + `group` (32) +
+    /// `unclaimed_excess_*` (16) fit in the previously-reserved 64-byte tail,
+    /// leaving 14 bytes of padding for future expansion.
     pub const LEN: usize = 8 // discriminator
         + 32 // authority
         + 8  // market_id
@@ -112,7 +122,8 @@ impl Market {
         + 64 // name
         + 2  // initial_price_bps (EXTENSION)
         + 32 // group (EXTENSION)
-        + 30; // padding (was 64 — 2 + 32 consumed by extensions)
+        + 16 // unclaimed_excess_yes + unclaimed_excess_no (EXTENSION)
+        + 14; // padding (was 64 — 2 + 32 + 16 consumed by extensions)
 
     // --- Q64.64 helpers ---
 
@@ -221,11 +232,69 @@ pub struct LpPosition {
     pub yes_per_share_checkpoint: u128,
     pub no_per_share_checkpoint: u128,
     pub bump: u8,
+    /// Entry-side surplus owed to this LP (see `Market::unclaimed_excess_*`).
+    /// Fits in the former 16-byte tail padding, so LEN is unchanged and
+    /// pre-existing positions read as 0.
+    pub excess_yes: u64,
+    pub excess_no: u64,
 }
 
 impl LpPosition {
     pub const SEED: &'static [u8] = b"lp";
+    /// 8 disc + owner + market + shares + collateral + 2 checkpoints + bump + 2 excess.
     pub const LEN: usize = 8 + 32 + 32 + 16 + 8 + 16 + 16 + 1 + 16;
+
+    /// Credit an entry-side surplus to this position and to the market's
+    /// unclaimed counters (so the solvency guard keeps counting it).
+    pub fn credit_excess(&mut self, market: &mut Market, yes: u64, no: u64) {
+        self.excess_yes = self.excess_yes.saturating_add(yes);
+        self.excess_no = self.excess_no.saturating_add(no);
+        market.unclaimed_excess_yes = market.unclaimed_excess_yes.saturating_add(yes);
+        market.unclaimed_excess_no = market.unclaimed_excess_no.saturating_add(no);
+    }
+
+    /// Take (and zero) this position's surplus, releasing it from the market's
+    /// unclaimed counters. Caller mints it (or pays it out post-resolution).
+    pub fn take_excess(&mut self, market: &mut Market) -> (u64, u64) {
+        let (yes, no) = (self.excess_yes, self.excess_no);
+        self.excess_yes = 0;
+        self.excess_no = 0;
+        market.unclaimed_excess_yes = market.unclaimed_excess_yes.saturating_sub(yes);
+        market.unclaimed_excess_no = market.unclaimed_excess_no.saturating_sub(no);
+        (yes, no)
+    }
+}
+
+/// Entry-side surplus of a deposit of `amount` that added `(dx, dy)` to the
+/// reserves: the tokens the deposit backs but the pool does not hold. Floored
+/// so the credited surplus never exceeds the real backing.
+pub fn deposit_excess(amount: u64, dx: I80F48, dy: I80F48) -> (u64, u64) {
+    let a = I80F48::from_num(amount);
+    let side = |d: I80F48| (a - d).max(I80F48::ZERO).to_num::<u64>();
+    (side(dx), side(dy))
+}
+
+/// LP shares minted by a follow-up deposit that adds `l_zero_increment` to a
+/// pool of `total_shares` over `old_l_zero`: proportional to the L_0 it adds,
+/// so the L_0 backing each share (and thus every LP's slice of the reserves)
+/// is unchanged. NOT 1 share per USDC: once trades skew the pool, its max
+/// reserve per share drifts from 1 and 1:1 minting let a deposit + immediate
+/// withdraw skim the existing LPs. Floored (favours existing LPs).
+pub fn shares_for_l_zero_increment(
+    total_shares: I80F48,
+    old_l_zero: I80F48,
+    l_zero_increment: I80F48,
+) -> Result<I80F48> {
+    require!(old_l_zero > I80F48::ZERO, PmAmmError::InsufficientLiquidity);
+    // Multiply first for precision; fall back to ratio-first on overflow.
+    let shares = match total_shares.checked_mul(l_zero_increment) {
+        Some(p) => p / old_l_zero,
+        None => total_shares
+            .checked_mul(l_zero_increment / old_l_zero)
+            .ok_or(PmAmmError::MathOverflow)?,
+    };
+    require!(shares > I80F48::ZERO, PmAmmError::InvalidBudget);
+    Ok(shares)
 }
 
 // ============================================================================
@@ -402,7 +471,12 @@ pub struct CommitmentVault {
     pub lp_position: Pubkey,
 
     pub bump: u8,
-    pub _reserved: [u8; 32],
+    /// Entry-side surplus of the launch deposit (whole pot). Split pro-rata to
+    /// committers in `claim_committer`. Carved from `_reserved` (was 32 bytes):
+    /// vaults launched before this field existed read 0.
+    pub launch_excess_yes: u64,
+    pub launch_excess_no: u64,
+    pub _reserved: [u8; 16],
 }
 
 impl CommitmentVault {
@@ -424,7 +498,8 @@ impl CommitmentVault {
         + 32 // market
         + 32 // lp_position
         + 1  // bump
-        + 32; // reserved
+        + 16 // launch_excess_yes + launch_excess_no
+        + 16; // reserved
 
     /// Total = yes_total + no_total. Used as the AMM bootstrap budget.
     pub fn total(&self) -> u64 {
@@ -643,6 +718,228 @@ impl CommitPositionGroup {
 // Tests
 // ============================================================================
 
+// ============================================================================
+// BetVault — "winner takes the pot, the pot is the liquidity" (Bet Vault v2)
+// PDA seeds: [b"bet_vault", vault_id.to_le_bytes()]
+//
+// EXTENSION over the paper. Committers are BETTORS, not LPs: they commit on
+// YES or NO, the stake ratio sets the odds (launch price = yes_total / total),
+// and at resolution the WINNING side splits everything the vault owns, pro-rata
+// to stake; the losing side gets 0. `effective_lp_bps` of the pot is deposited
+// as pm-AMM liquidity (owned by the vault PDA) so outsiders can trade against
+// it; the rest stays as USDC in the vault. The vault PDA is `market.authority`,
+// so the creator half of the swap fee flows into the pot.
+//
+// The LP share is capped at the favourite's stake share (see
+// `effective_lp_bps`): in the worst case outside flow drains the pool's
+// winning-side reserve, and the kept USDC alone must still cover the winning
+// side's stake, so a winner never receives less than they staked.
+// ============================================================================
+
+/// Max committers on an allowlisted bet vault (1v1 = 2).
+pub const MAX_BET_ALLOWLIST: usize = 8;
+
+/// Bounds for `BetVault::void_grace_secs` — how long after the market expires
+/// the resolver has before anyone may void the vault and refund every stake.
+pub const MIN_VOID_GRACE_SECS: i64 = 300;
+pub const MAX_VOID_GRACE_SECS: i64 = 60 * 60 * 24 * 30; // 30 days
+pub const DEFAULT_VOID_GRACE_SECS: i64 = 60 * 60 * 24 * 7; // 7 days
+
+#[account]
+pub struct BetVault {
+    pub authority: Pubkey,
+    /// Only key allowed to resolve (defaults to `authority`). Launch is
+    /// allowed to either `authority` or `resolver`.
+    pub resolver: Pubkey,
+    pub vault_id: u64,
+    pub collateral_mint: Pubkey,
+    /// UTF-8 zero-padded name (becomes the launched market's name).
+    pub name: [u8; 64],
+    pub commit_end_ts: i64,
+    pub market_end_ts: i64,
+    pub yes_total: u64,
+    pub no_total: u64,
+    pub commit_count: u32,
+    pub min_total: u64,
+    /// Requested share of the pot deposited as liquidity, in bps (0..=10_000).
+    pub lp_bps: u16,
+    /// Share actually deposited at launch: `min(lp_bps, favourite share)`.
+    pub effective_lp_bps: u16,
+    /// Number of used `allowlist` slots. 0 = anyone may commit.
+    pub allowlist_len: u8,
+    pub allowlist: [Pubkey; MAX_BET_ALLOWLIST],
+    pub launched: bool,
+    /// Launch price (bps of YES) = odds implied by the stakes.
+    pub price_bps: u16,
+    /// The launched Market PDA. `Pubkey::default()` pre-launch.
+    pub market: Pubkey,
+    /// Set by `settle_bet_vault`: 1 = YES, 2 = NO.
+    pub winning_side: u8,
+    pub settled: bool,
+    /// Vault collateral balance frozen at settlement — what winners split.
+    pub payout_pool: u64,
+    /// Winning-side stake already claimed, and USDC paid for it (dust sweep).
+    pub claimed_stake: u64,
+    pub paid_out: u64,
+    /// Set by the first `refund_bet`: the vault can then never launch, so a
+    /// partial refund can't flip it back to launchable and trap the rest.
+    pub refunding: bool,
+    /// Grace period after `market.end_ts` before `void_bet_vault` opens.
+    pub void_grace_secs: i64,
+    /// Set by `void_bet_vault`: the resolver never showed up, so `claim_bet`
+    /// refunds every committer pro-rata to their stake instead of paying the
+    /// winning side.
+    pub voided: bool,
+    pub bump: u8,
+    pub _reserved: [u8; 54],
+}
+
+impl BetVault {
+    pub const SEED: &'static [u8] = b"bet_vault";
+
+    pub const LEN: usize = 8 // discriminator
+        + 32 // authority
+        + 32 // resolver
+        + 8  // vault_id
+        + 32 // collateral_mint
+        + 64 // name
+        + 8  // commit_end_ts
+        + 8  // market_end_ts
+        + 8  // yes_total
+        + 8  // no_total
+        + 4  // commit_count
+        + 8  // min_total
+        + 2  // lp_bps
+        + 2  // effective_lp_bps
+        + 1  // allowlist_len
+        + 32 * MAX_BET_ALLOWLIST // allowlist
+        + 1  // launched
+        + 2  // price_bps
+        + 32 // market
+        + 1  // winning_side
+        + 1  // settled
+        + 8  // payout_pool
+        + 8  // claimed_stake
+        + 8  // paid_out
+        + 1  // refunding
+        + 8  // void_grace_secs
+        + 1  // voided
+        + 1  // bump
+        + 54; // reserved
+
+    pub fn total(&self) -> u64 {
+        self.yes_total.saturating_add(self.no_total)
+    }
+
+    /// YES share of the pot in bps (floor). 0 when empty.
+    pub fn raw_price_bps(&self) -> u64 {
+        let total = self.total();
+        if total == 0 {
+            return 0;
+        }
+        ((self.yes_total as u128) * 10_000 / (total as u128)) as u64
+    }
+
+    /// Launchable shape: both sides staked and odds inside the pm-AMM's valid
+    /// seed range [100, 9900] bps (no silent clamping — the odds are the bet).
+    pub fn has_valid_odds(&self) -> bool {
+        let p = self.raw_price_bps();
+        self.yes_total > 0 && self.no_total > 0 && (100..=9900).contains(&p)
+    }
+
+    /// `min(lp_bps, favourite's share)`. Worst case, outside flow drains the
+    /// pool's reserve on the winning side; the kept `1 - lp` of the pot must
+    /// still cover that side's stake. The underdog is the binding case, whose
+    /// stake share is `1 - favourite share`, hence the cap.
+    pub fn effective_lp_bps(&self) -> u16 {
+        let p = self.raw_price_bps();
+        let favourite = p.max(10_000u64.saturating_sub(p));
+        (self.lp_bps as u64).min(favourite) as u16
+    }
+
+    pub fn is_allowed(&self, who: &Pubkey) -> bool {
+        let n = self.allowlist_len as usize;
+        n == 0 || self.allowlist[..n].contains(who)
+    }
+
+    pub fn winning_total(&self) -> u64 {
+        match self.winning_side {
+            1 => self.yes_total,
+            2 => self.no_total,
+            _ => 0,
+        }
+    }
+
+    /// Stake that shares the payout pool, and this position's slice of it: the
+    /// winning side normally, everyone (pro-rata to total stake) once voided.
+    pub fn payout_basis(&self, position: &BetPosition) -> (u64, u64) {
+        if self.voided {
+            (position.total(), self.total())
+        } else {
+            (position.stake_on(self.winning_side), self.winning_total())
+        }
+    }
+
+    pub fn name_str(&self) -> &str {
+        let len = self
+            .name
+            .iter()
+            .position(|&b| b == 0)
+            .unwrap_or(self.name.len());
+        core::str::from_utf8(&self.name[..len]).unwrap_or("")
+    }
+}
+
+/// Payout of a winning stake: `pool * stake / winning_total`, floored — except
+/// the claim that completes the winning side, which takes whatever is left so
+/// no rounding dust stays in the vault.
+pub fn bet_payout(
+    pool: u64,
+    stake: u64,
+    winning_total: u64,
+    claimed_stake: u64,
+    paid_out: u64,
+) -> u64 {
+    if winning_total == 0 || stake == 0 {
+        return 0;
+    }
+    if claimed_stake.saturating_add(stake) >= winning_total {
+        return pool.saturating_sub(paid_out);
+    }
+    ((pool as u128) * (stake as u128) / (winning_total as u128)) as u64
+}
+
+// ============================================================================
+// BetPosition — PDA seeds: [b"bet_position", bet_vault, owner]
+// ============================================================================
+
+#[account]
+pub struct BetPosition {
+    pub vault: Pubkey,
+    pub owner: Pubkey,
+    pub yes_amount: u64,
+    pub no_amount: u64,
+    pub bump: u8,
+    pub _reserved: [u8; 16],
+}
+
+impl BetPosition {
+    pub const SEED: &'static [u8] = b"bet_position";
+    pub const LEN: usize = 8 + 32 + 32 + 8 + 8 + 1 + 16;
+
+    pub fn total(&self) -> u64 {
+        self.yes_amount.saturating_add(self.no_amount)
+    }
+
+    pub fn stake_on(&self, side: u8) -> u64 {
+        match side {
+            1 => self.yes_amount,
+            2 => self.no_amount,
+            _ => 0,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -673,6 +970,8 @@ mod tests {
             name: [0u8; 64],
             initial_price_bps: 0,
             group: Pubkey::default(),
+            unclaimed_excess_yes: 0,
+            unclaimed_excess_no: 0,
         };
 
         // Test various values round-trip through u128 storage
@@ -731,6 +1030,8 @@ mod tests {
             name: [0u8; 64],
             initial_price_bps: 0,
             group: Pubkey::default(),
+            unclaimed_excess_yes: 0,
+            unclaimed_excess_no: 0,
         };
         // 0 maps to 0.5 (legacy)
         let v0: f64 = market.initial_price_fixed().to_num();
@@ -775,6 +1076,8 @@ mod tests {
             name: [0u8; 64],
             initial_price_bps: 0,
             group: Pubkey::default(),
+            unclaimed_excess_yes: 0,
+            unclaimed_excess_no: 0,
         };
         assert!(!market.is_attached_to_group(), "default = standalone");
         market.group = Pubkey::new_unique();
@@ -807,6 +1110,8 @@ mod tests {
             name: [0u8; 64],
             initial_price_bps: 0,
             group: Pubkey::default(),
+            unclaimed_excess_yes: 0,
+            unclaimed_excess_no: 0,
         };
 
         assert_eq!(market.get_winning_side(), None);
@@ -903,7 +1208,9 @@ mod tests {
             market: Pubkey::default(),
             lp_position: Pubkey::default(),
             bump: 0,
-            _reserved: [0u8; 32],
+            launch_excess_yes: 0,
+            launch_excess_no: 0,
+            _reserved: [0u8; 16],
         }
     }
 
@@ -1106,5 +1413,198 @@ mod tests {
                 "per-attach cap is redundant for N={n}: worst_case_overseed={worst_case_overseed}"
             );
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Entry-side surplus fix + Bet Vault v2
+    // ------------------------------------------------------------------
+
+    fn launch_reserves(deposit: u64, price_bps: u16, secs: i64) -> (I80F48, I80F48) {
+        let price = I80F48::from_num(price_bps) / I80F48::from_num(10_000u16);
+        let l0 = crate::pm_math::suggest_l_zero_for_max_reserve(deposit, secs, price).unwrap();
+        let l_eff = crate::pm_math::l_effective(l0, secs).unwrap();
+        crate::pm_math::reserves_from_price(price, l_eff).unwrap()
+    }
+
+    #[test]
+    fn test_deposit_excess_backs_every_token_at_70pct() {
+        // 100 USDC at 70%: pool holds ~26.63 YES + 100 NO. Without the fix the
+        // ~73.37 USDC above the YES side is claimable by no token.
+        let d = 100_000_000u64;
+        let (x, y) = launch_reserves(d, 7000, 3600);
+        let (ex, ey) = deposit_excess(d, x, y);
+        let yes_total = x.to_num::<u64>() + ex;
+        let no_total = y.to_num::<u64>() + ey;
+        assert!(ex > 73_000_000 && ex < 73_700_000, "excess_yes={ex}");
+        assert!(
+            ey <= 1,
+            "NO side is the calibrated max side, excess_no={ey}"
+        );
+        // Each side's claims (reserve + surplus) equal the deposit to the lamport.
+        assert!(
+            d - yes_total <= 1 && yes_total <= d,
+            "yes claims {yes_total}"
+        );
+        assert!(d - no_total <= 1 && no_total <= d, "no claims {no_total}");
+    }
+
+    #[test]
+    fn test_deposit_excess_zero_at_50pct_and_never_negative() {
+        let d = 50_000_000u64;
+        let (x, y) = launch_reserves(d, 5000, 3600);
+        let (ex, ey) = deposit_excess(d, x, y);
+        assert!(ex <= 1 && ey <= 1, "50/50 has no surplus ({ex}, {ey})");
+        // Reserve increments above the amount (rounding) clamp to 0, never wrap.
+        let over = I80F48::from_num(d + 5);
+        assert_eq!(deposit_excess(d, over, over), (0, 0));
+    }
+
+    #[test]
+    fn test_lp_excess_credit_and_take_keep_market_counters_in_sync() {
+        let mut m: Market = unsafe { core::mem::zeroed() };
+        let mut lp: LpPosition = unsafe { core::mem::zeroed() };
+        lp.credit_excess(&mut m, 70, 0);
+        lp.credit_excess(&mut m, 5, 3);
+        assert_eq!((lp.excess_yes, lp.excess_no), (75, 3));
+        assert_eq!((m.unclaimed_excess_yes, m.unclaimed_excess_no), (75, 3));
+        assert_eq!(lp.take_excess(&mut m), (75, 3));
+        assert_eq!((lp.excess_yes, lp.excess_no), (0, 0));
+        assert_eq!((m.unclaimed_excess_yes, m.unclaimed_excess_no), (0, 0));
+        assert_eq!(lp.take_excess(&mut m), (0, 0), "second take is a no-op");
+    }
+
+    #[test]
+    fn test_follow_up_shares_keep_l_zero_per_share() {
+        let f = |v: f64| I80F48::from_num(v);
+        // Doubling L_0 doubles the shares, whatever USDC it took to add it.
+        let s = shares_for_l_zero_increment(f(50e6), f(1_000.0), f(1_000.0)).unwrap();
+        assert_eq!(s, f(50e6));
+        // L_0 per share is preserved (floored: the depositor never gets more).
+        let (total, l0, inc) = (f(123_456_789.0), f(3_141.5), f(27.18));
+        let s = shares_for_l_zero_increment(total, l0, inc).unwrap();
+        let before: f64 = (l0 / total).to_num();
+        let after: f64 = ((l0 + inc) / (total + s)).to_num();
+        assert!(
+            (after - before).abs() / before < 1e-12,
+            "{before} vs {after}"
+        );
+        assert!(s <= total * inc / l0);
+        // Huge pools take the overflow-safe path instead of failing.
+        let big = shares_for_l_zero_increment(f(4e23), f(1e10), f(1e9)).unwrap();
+        assert!((big.to_num::<f64>() / 4e22 - 1.0).abs() < 1e-9);
+        assert!(shares_for_l_zero_increment(f(1.0), I80F48::ZERO, f(1.0)).is_err());
+    }
+
+    fn bet_vault(yes: u64, no: u64, lp_bps: u16) -> BetVault {
+        let mut v: BetVault = unsafe { core::mem::zeroed() };
+        v.yes_total = yes;
+        v.no_total = no;
+        v.lp_bps = lp_bps;
+        v
+    }
+
+    #[test]
+    fn test_bet_vault_odds_validity() {
+        assert_eq!(bet_vault(70, 30, 0).raw_price_bps(), 7000);
+        assert!(bet_vault(70, 30, 0).has_valid_odds());
+        assert!(!bet_vault(100, 0, 0).has_valid_odds(), "one-sided");
+        assert!(!bet_vault(0, 100, 0).has_valid_odds(), "one-sided");
+        assert!(!bet_vault(1, 200, 0).has_valid_odds(), "0.49% < 1%");
+        assert!(bet_vault(1, 99, 0).has_valid_odds(), "exactly 1%");
+        assert!(!bet_vault(0, 0, 0).has_valid_odds(), "empty");
+    }
+
+    #[test]
+    fn test_bet_vault_lp_cap_is_favourite_share() {
+        assert_eq!(bet_vault(70, 30, 10_000).effective_lp_bps(), 7000);
+        assert_eq!(bet_vault(30, 70, 10_000).effective_lp_bps(), 7000);
+        assert_eq!(bet_vault(70, 30, 5000).effective_lp_bps(), 5000);
+        assert_eq!(bet_vault(50, 50, 9000).effective_lp_bps(), 5000);
+        assert_eq!(bet_vault(70, 30, 0).effective_lp_bps(), 0);
+    }
+
+    #[test]
+    fn test_bet_vault_cap_guarantees_winner_floor() {
+        // Worst case the pool's reserve on the winning side is drained to 0.
+        // Winner's floor = kept + surplus on their side; it must cover their
+        // side's stake at the capped LP share, for favourite AND underdog.
+        let total = 100_000_000u64;
+        for yes_bps in [5100u16, 5500, 6000, 7000, 8000, 9000, 9900] {
+            let yes = total * yes_bps as u64 / 10_000;
+            let v = bet_vault(yes, total - yes, 10_000);
+            let lp = total * v.effective_lp_bps() as u64 / 10_000;
+            let kept = total - lp;
+            let (x, y) = launch_reserves(lp, yes_bps, 3600);
+            let (ex, ey) = deposit_excess(lp, x, y);
+            assert!(kept + ex + 1 >= v.yes_total, "YES floor at {yes_bps}");
+            assert!(kept + ey + 1 >= v.no_total, "NO floor at {yes_bps}");
+        }
+    }
+
+    #[test]
+    fn test_bet_payout_pro_rata_and_dust_sweep() {
+        // Pool 100, winners staked 1 + 1 + 1 (= 3): 33, 33, then 34 (sweep).
+        let (pool, wt) = (100u64, 3u64);
+        let a = bet_payout(pool, 1, wt, 0, 0);
+        let b = bet_payout(pool, 1, wt, 1, a);
+        let c = bet_payout(pool, 1, wt, 2, a + b);
+        assert_eq!((a, b, c), (33, 33, 34));
+        assert_eq!(a + b + c, pool, "nothing left in the vault");
+        assert_eq!(bet_payout(pool, 0, wt, 0, 0), 0, "loser gets 0");
+        assert_eq!(
+            bet_payout(pool, 70, 70, 0, 0),
+            pool,
+            "sole winner takes all"
+        );
+    }
+
+    #[test]
+    fn test_bet_payout_basis_winner_vs_voided() {
+        let mut v = bet_vault(70, 30, 5000);
+        let mut pos: BetPosition = unsafe { core::mem::zeroed() };
+        pos.yes_amount = 40;
+        pos.no_amount = 10;
+        // Resolved YES: only the YES stake counts, against the YES side total.
+        v.winning_side = 1;
+        assert_eq!(v.payout_basis(&pos), (40, 70));
+        // Voided: everyone is refunded pro-rata to their whole stake.
+        v.voided = true;
+        assert_eq!(v.payout_basis(&pos), (50, 100));
+        // A pure loser gets 0 when resolved, but is refunded when voided.
+        let mut loser: BetPosition = unsafe { core::mem::zeroed() };
+        loser.no_amount = 30;
+        v.voided = false;
+        assert_eq!(v.payout_basis(&loser).0, 0);
+        v.voided = true;
+        assert_eq!(v.payout_basis(&loser), (30, 100));
+    }
+
+    #[test]
+    fn test_bet_vault_allowlist() {
+        let mut v = bet_vault(0, 0, 0);
+        let (a, b) = (Pubkey::new_unique(), Pubkey::new_unique());
+        assert!(v.is_allowed(&a), "empty allowlist = open");
+        v.allowlist[0] = a;
+        v.allowlist_len = 1;
+        assert!(v.is_allowed(&a));
+        assert!(!v.is_allowed(&b));
+        assert!(
+            !v.is_allowed(&Pubkey::default()),
+            "unused slots don't match"
+        );
+    }
+
+    #[test]
+    fn test_bet_accounts_fit_and_layouts_unchanged() {
+        const SOLANA_INIT_LIMIT: usize = 10_240;
+        const _: () = assert!(BetVault::LEN < SOLANA_INIT_LIMIT);
+        const _: () = assert!(BetPosition::LEN < SOLANA_INIT_LIMIT);
+        // Surplus fields were carved out of padding: live accounts keep their size.
+        assert_eq!(Market::LEN, 443);
+        assert_eq!(LpPosition::LEN, 145);
+        assert_eq!(
+            CommitmentVault::LEN,
+            8 + 32 + 8 + 32 + 64 + 8 * 4 + 4 + 8 + 1 + 2 + 32 + 32 + 1 + 32
+        );
     }
 }

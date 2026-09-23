@@ -117,8 +117,17 @@ pub fn handler(ctx: Context<WithdrawLiquidity>, shares_to_burn: u128) -> Result<
 
         let total_yes = pending_yes + yes_from_pool;
         let total_no = pending_no + no_from_pool;
-        yes_u64 = total_yes.max(I80F48::ZERO).to_num::<u64>();
-        no_u64 = total_no.max(I80F48::ZERO).to_num::<u64>();
+        // Entry-side surplus (fix): released in full on any withdraw, so it can
+        // never be lost when a fully-withdrawn position is closed below.
+        let (excess_yes, excess_no) = lp.take_excess(market);
+        yes_u64 = total_yes
+            .max(I80F48::ZERO)
+            .to_num::<u64>()
+            .saturating_add(excess_yes);
+        no_u64 = total_no
+            .max(I80F48::ZERO)
+            .to_num::<u64>()
+            .saturating_add(excess_no);
 
         // Extract signer data
         market_id_bytes = market.market_id.to_le_bytes();

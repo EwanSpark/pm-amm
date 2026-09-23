@@ -52,7 +52,7 @@ const MARKET_SEED = Buffer.from("market");
 
 /** Metaplex Token Metadata Program — required by initialize_market. */
 const METAPLEX_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
-const PROTOCOL_DAO = new PublicKey("HKLjYENZaFghSp2TM5VJad32wVu7d2XCMJZqKGTQ3ZeL");
+const PROTOCOL_DAO = new PublicKey("4qXyczAr5DuBVaHUwmZT5Xt6hgQ6RwqBYcFGtrv8QEph");
 
 function deriveMetadataPda(mint: PublicKey): PublicKey {
   return PublicKey.findProgramAddressSync(

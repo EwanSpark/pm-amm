@@ -5,7 +5,7 @@
  *   - `PmAmmClient`        — bound to a deployment {connection, programId, collateralMint}
  *   - PDA derivations      — pure `derive*(programId, …)` helpers
  *   - reads                — typed account fetchers
- *   - instruction builders — composable `TransactionInstruction` factories (26 ix)
+ *   - instruction builders — composable `TransactionInstruction` factories (34 ix)
  *   - send / flows         — convenience wrappers + multi-tx orchestrations
  *   - math                 — pure float-64 pricing/LP helpers (also at `@pm-amm/sdk/math`)
  *   - types / constants / IDL

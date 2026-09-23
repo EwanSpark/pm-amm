@@ -100,4 +100,21 @@ pub enum PmAmmError {
     InvalidMarket,
     #[msg("Market vault token account does not match market.vault")]
     InvalidVault,
+    // ----- Bet Vault v2 -----
+    #[msg("Bet vault needs stakes on both sides with odds in [1%, 99%]")]
+    BetVaultInvalidOdds,
+    #[msg("Signer is not on this bet vault's allowlist")]
+    NotOnAllowlist,
+    #[msg("Allowlist longer than MAX_BET_ALLOWLIST")]
+    AllowlistTooLong,
+    #[msg("lp_bps must be between 0 and 10_000")]
+    InvalidLpBps,
+    #[msg("Bet vault not settled yet")]
+    BetVaultNotSettled,
+    #[msg("Bet vault already settled")]
+    BetVaultAlreadySettled,
+    #[msg("void_grace_secs must be between 5 min and 30 days")]
+    InvalidVoidGrace,
+    #[msg("Void grace period has not elapsed yet")]
+    VoidTooEarly,
 }

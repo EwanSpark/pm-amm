@@ -33,6 +33,9 @@ import {
   deriveVaultGroupPda,
   deriveVaultGroupCollateralPda,
   deriveCommitGroupPositionPda,
+  deriveBetVaultPda,
+  deriveBetPositionPda,
+  deriveBetVaultCollateral,
   deriveMetadataPda,
 } from "./pda";
 import type {
@@ -44,6 +47,8 @@ import type {
   CommitPositionAccount,
   CommitmentVaultGroupAccount,
   CommitPositionGroupAccount,
+  BetVaultAccount,
+  BetPositionAccount,
 } from "./types/accounts";
 import { makeSend, type SendApi } from "./send";
 import { makeFlows, type FlowsApi } from "./flows";
@@ -71,7 +76,7 @@ export class PmAmmClient {
   readonly ctx: IxContext;
   private readonly provider?: AnchorProvider;
 
-  /** Composable instruction builders (no signing) for all 26 instructions. */
+  /** Composable instruction builders (no signing) for all 34 instructions. */
   readonly ix: BoundIx;
   /** Convenience send wrappers (require a provider). */
   readonly send: SendApi;
@@ -175,6 +180,11 @@ export class PmAmmClient {
   vaultGroupCollateral = (vault: PublicKey) => deriveVaultGroupCollateralPda(this.programId, vault);
   commitGroupPosition = (vault: PublicKey, owner: PublicKey) =>
     deriveCommitGroupPositionPda(this.programId, vault, owner);
+  betVaultPda = (id: number | bigint) => deriveBetVaultPda(this.programId, id);
+  betPosition = (betVault: PublicKey, owner: PublicKey) =>
+    deriveBetPositionPda(this.programId, betVault, owner);
+  betVaultCollateral = (betVault: PublicKey, mint: PublicKey = this.collateralMint) =>
+    deriveBetVaultCollateral(betVault, mint);
   metadataPda = (mint: PublicKey) => deriveMetadataPda(mint, this.metaplexProgramId);
 
   // --------------------------------------------------------------------------
@@ -216,6 +226,15 @@ export class PmAmmClient {
     owner: PublicKey,
   ): Promise<CommitPositionGroupAccount | null> {
     return this.accounts.commitPositionGroup.fetchNullable(this.commitGroupPosition(vault, owner));
+  }
+  fetchBetVault(pda: PublicKey): Promise<BetVaultAccount | null> {
+    return this.accounts.betVault.fetchNullable(pda);
+  }
+  fetchAllBetVaults(dataSize?: number) {
+    return this.accounts.betVault.all(dataSize ? [{ dataSize }] : undefined);
+  }
+  fetchBetPosition(betVault: PublicKey, owner: PublicKey): Promise<BetPositionAccount | null> {
+    return this.accounts.betPosition.fetchNullable(this.betPosition(betVault, owner));
   }
 }
 

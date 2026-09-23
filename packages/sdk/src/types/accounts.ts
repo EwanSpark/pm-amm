@@ -1,5 +1,5 @@
 /**
- * Typed shapes for the program's 7 accounts — kept aligned with
+ * Typed shapes for the program's 9 accounts — kept aligned with
  * `anchor/programs/pm_amm/src/state.rs`. Anchor decodes every field; these
  * interfaces type the fields callers use (padding/`_reserved` fields are
  * present at runtime but intentionally omitted here).
@@ -38,6 +38,9 @@ export interface MarketAccount {
   initialPriceBps: number;
   /** EXTENSION: GroupMarket PDA this leg is attached to (default = standalone). */
   group: Pk;
+  /** Entry-side surplus owed to LPs, not yet minted (counted by the solvency guard). */
+  unclaimedExcessYes: Bn;
+  unclaimedExcessNo: Bn;
 }
 
 export interface GroupMarketAccount {
@@ -64,6 +67,9 @@ export interface LpPositionAccount {
   yesPerShareCheckpoint: Bn;
   noPerShareCheckpoint: Bn;
   bump: number;
+  /** Entry-side surplus owed to this LP — minted by claimLpResiduals / withdraw. */
+  excessYes: Bn;
+  excessNo: Bn;
 }
 
 /** Binary commitment vault (Sprint 22). */
@@ -85,6 +91,54 @@ export interface CommitmentVaultAccount {
   market: Pk;
   /** Vault's LpPosition on the market; set if the vault later deposits. */
   lpPosition: Pk;
+  bump: number;
+}
+
+/** Bet Vault v2 — winner takes the pot, the pot is the liquidity. */
+export interface BetVaultAccount {
+  authority: Pk;
+  /** Only key allowed to resolve (launch: authority or resolver). */
+  resolver: Pk;
+  vaultId: Bn;
+  collateralMint: Pk;
+  name: number[];
+  commitEndTs: Bn;
+  marketEndTs: Bn;
+  yesTotal: Bn;
+  noTotal: Bn;
+  commitCount: number;
+  minTotal: Bn;
+  /** Requested share of the pot deposited as liquidity (bps). */
+  lpBps: number;
+  /** Share actually deposited at launch: min(lpBps, favourite's share). */
+  effectiveLpBps: number;
+  allowlistLen: number;
+  allowlist: Pk[];
+  launched: boolean;
+  /** Launch odds (bps of YES) implied by the stakes. */
+  priceBps: number;
+  market: Pk;
+  /** 0 until settled, then 1 = YES, 2 = NO. */
+  winningSide: number;
+  settled: boolean;
+  /** Vault balance frozen at settlement — what the winning side splits. */
+  payoutPool: Bn;
+  claimedStake: Bn;
+  paidOut: Bn;
+  refunding: boolean;
+  /** Grace period after market end before `void_bet_vault` opens (seconds). */
+  voidGraceSecs: Bn;
+  /** True once voided: `claim_bet` refunds every committer pro-rata. */
+  voided: boolean;
+  bump: number;
+}
+
+/** Per-committer stake in a bet vault. */
+export interface BetPositionAccount {
+  vault: Pk;
+  owner: Pk;
+  yesAmount: Bn;
+  noAmount: Bn;
   bump: number;
 }
 
@@ -146,4 +200,6 @@ export interface ProgramAccountNamespace {
   commitPosition: AccountFetcher<CommitPositionAccount>;
   commitmentVaultGroup: AccountFetcher<CommitmentVaultGroupAccount>;
   commitPositionGroup: AccountFetcher<CommitPositionGroupAccount>;
+  betVault: AccountFetcher<BetVaultAccount>;
+  betPosition: AccountFetcher<BetPositionAccount>;
 }

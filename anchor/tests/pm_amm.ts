@@ -20,7 +20,7 @@ const LP_SEED = Buffer.from("lp");
 /** Metaplex Token Metadata Program — required by initialize_market for the
  *  YES/NO mint metadata CPI. */
 const METAPLEX_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
-const PROTOCOL_DAO = new PublicKey("HKLjYENZaFghSp2TM5VJad32wVu7d2XCMJZqKGTQ3ZeL");
+const PROTOCOL_DAO = new PublicKey("4qXyczAr5DuBVaHUwmZT5Xt6hgQ6RwqBYcFGtrv8QEph");
 
 /** Metaplex metadata PDA: [b"metadata", program, mint]. */
 function deriveMetadataPda(mint: PublicKey): PublicKey {
@@ -256,7 +256,12 @@ describe("pm_amm", () => {
       trader.publicKey,
     );
     await mintTo(provider.connection, payer, collateralMint, traderUsdc, payer, 1_000_000_000);
-    const traderYes = await createAccount(provider.connection, payer, pdas.yesMint, trader.publicKey);
+    const traderYes = await createAccount(
+      provider.connection,
+      payer,
+      pdas.yesMint,
+      trader.publicKey,
+    );
     const traderNo = await createAccount(provider.connection, payer, pdas.noMint, trader.publicKey);
 
     // creator_usdc = userUsdc (owned by `authority` = the market creator),

@@ -10,8 +10,8 @@ import {
   type Connection,
 } from "@solana/web3.js";
 import { getAssociatedTokenAddress } from "@solana/spl-token";
-import { USDC_MINT } from "@/lib/constants";
 import { getClient } from "@/lib/pm-amm-client";
+import { creatorFeeAtaIxs } from "@/lib/swap-fees";
 import type { PmAmmClient, SwapDirection } from "@pm-amm/sdk";
 import { PROTOCOL_DAO } from "@pm-amm/sdk";
 import type { UserTokens } from "@/hooks/use-user-tokens";
@@ -42,7 +42,11 @@ export function usePositionValue(marketPda: string | undefined, tokens: UserToke
         const client = getClient(connection);
         // Per-market collateral (any SPL token) — resolve from the account.
         const m = await client.fetchMarket(market);
-        const collatMint = m ? (m.collateralMint as PublicKey) : USDC_MINT;
+        if (!m) return null;
+        const collatMint = m.collateralMint as PublicKey;
+        // `creatorUsdc = null` is creator-only on-chain: sell as the trader,
+        // paying the real creator's fee account (created in the sim if missing).
+        const creator = m.authority as PublicKey;
 
         const yesMint = client.yesMint(market);
         const noMint = client.noMint(market);
@@ -74,6 +78,7 @@ export function usePositionValue(marketPda: string | undefined, tokens: UserToke
             createAssociatedTokenAccountInstruction(publicKey, daoUsdc, PROTOCOL_DAO, collatMint),
           );
         }
+        ataIxs.push(...(await creatorFeeAtaIxs(connection, publicKey, collatMint, creator)));
 
         let yesValueUsdc = 0;
         let noValueUsdc = 0;
@@ -90,6 +95,7 @@ export function usePositionValue(marketPda: string | undefined, tokens: UserToke
             ataIxs,
             userUsdc,
             collatMint,
+            creator,
           );
         }
 
@@ -105,6 +111,7 @@ export function usePositionValue(marketPda: string | undefined, tokens: UserToke
             ataIxs,
             userUsdc,
             collatMint,
+            creator,
           );
         }
 
@@ -140,6 +147,7 @@ async function simulateSell(
   ataIxs: TransactionInstruction[],
   outputAta: PublicKey,
   collateralMint: PublicKey,
+  creatorAuthority: PublicKey,
 ): Promise<number> {
   // Get pre-balance of USDC ATA
   let preBal = 0;
@@ -159,7 +167,7 @@ async function simulateSell(
     direction,
     amountIn: amount,
     minOutput: 0,
-    creatorAuthority: publicKey, // value with creatorUsdc=null (payout is identical)
+    creatorAuthority,
     collateralMint,
   });
 

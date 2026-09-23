@@ -75,6 +75,206 @@ export type PmAmm = {
       ]
     },
     {
+      "name": "betCommit",
+      "docs": [
+        "Stake on YES or NO until commit_end_ts (allowlist enforced if set)."
+      ],
+      "discriminator": [
+        235,
+        172,
+        63,
+        85,
+        225,
+        13,
+        148,
+        42
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "betVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bet_vault.vault_id",
+                "account": "betVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vaultCollateral",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "betVault"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bet_vault.collateral_mint",
+                "account": "betVault"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "userCollateral",
+          "writable": true
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "betVault"
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "side",
+          "type": {
+            "defined": {
+              "name": "side"
+            }
+          }
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "cancelGroupMarket",
       "docs": [
         "Cancel an abandoned GroupMarket past expiration. Marks it resolved with",
@@ -99,6 +299,190 @@ export type PmAmm = {
         {
           "name": "groupMarket",
           "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claimBet",
+      "docs": [
+        "Winners take `pool × stake / winning_total`; losers get 0. Closes the",
+        "position."
+      ],
+      "discriminator": [
+        60,
+        61,
+        185,
+        215,
+        180,
+        119,
+        174,
+        126
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "betVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bet_vault.vault_id",
+                "account": "betVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vaultCollateral",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "betVault"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bet_vault.collateral_mint",
+                "account": "betVault"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "userCollateral",
+          "writable": true
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "betVault"
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": []
@@ -743,6 +1127,209 @@ export type PmAmm = {
       ]
     },
     {
+      "name": "initializeBetVault",
+      "docs": [
+        "Open a bet vault. `lp_bps` = share of the pot deposited as liquidity at",
+        "launch (capped at the favourite's stake share). `resolver` =",
+        "`Pubkey::default()` → the caller. Empty `allowlist` → anyone may commit."
+      ],
+      "discriminator": [
+        50,
+        239,
+        133,
+        55,
+        197,
+        177,
+        13,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "betVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "vaultId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collateralMint",
+          "docs": [
+            "Collateral mint — any SPL mint (YES/NO inherit its decimals at launch)."
+          ]
+        },
+        {
+          "name": "vaultCollateral",
+          "docs": [
+            "The vault PDA's collateral ATA. An ATA (not a custom PDA) so the swap",
+            "creator-fee account resolves to it like for any market authority."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "betVault"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "collateralMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        }
+      ],
+      "args": [
+        {
+          "name": "vaultId",
+          "type": "u64"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "commitDurationSecs",
+          "type": "i64"
+        },
+        {
+          "name": "marketDurationSecs",
+          "type": "i64"
+        },
+        {
+          "name": "minTotal",
+          "type": "u64"
+        },
+        {
+          "name": "lpBps",
+          "type": "u16"
+        },
+        {
+          "name": "resolver",
+          "type": "pubkey"
+        },
+        {
+          "name": "allowlist",
+          "type": {
+            "vec": "pubkey"
+          }
+        },
+        {
+          "name": "voidGraceSecs",
+          "type": "i64"
+        }
+      ]
+    },
+    {
       "name": "initializeGroupMarket",
       "docs": [
         "Create a GroupMarket wrapping `leg_count` binary markets as a",
@@ -863,7 +1450,9 @@ export type PmAmm = {
         {
           "name": "collateralMint",
           "docs": [
-            "The collateral mint (USDC or mock). Must have 6 decimals."
+            "The collateral mint — ANY SPL mint. The YES/NO mints below are created",
+            "with the SAME decimals, so \"1 collateral unit = 1 winning token\" holds",
+            "and the reserves/solvency math stays scale-invariant."
           ]
         },
         {
@@ -1029,7 +1618,7 @@ export type PmAmm = {
         {
           "name": "collateralMint",
           "docs": [
-            "USDC (or mock) mint. Must be 6 decimals."
+            "Collateral mint — any SPL mint. YES/NO mints inherit its decimals at launch."
           ]
         },
         {
@@ -1155,7 +1744,10 @@ export type PmAmm = {
           }
         },
         {
-          "name": "collateralMint"
+          "name": "collateralMint",
+          "docs": [
+            "Collateral mint — any SPL mint. YES/NO mints inherit its decimals at launch."
+          ]
         },
         {
           "name": "vaultCollateral",
@@ -1237,6 +1829,303 @@ export type PmAmm = {
         },
         {
           "name": "minTotal",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "launchBetVault",
+      "docs": [
+        "Launch the market at the stake-implied odds. Authority or resolver only.",
+        "The vault PDA becomes market.authority (resolution + creator fee)."
+      ],
+      "discriminator": [
+        57,
+        68,
+        247,
+        163,
+        22,
+        165,
+        60,
+        200
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Authority or resolver — pays the rent of the new accounts."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "betVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bet_vault.vault_id",
+                "account": "betVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "marketId"
+              }
+            ]
+          }
+        },
+        {
+          "name": "collateralMint"
+        },
+        {
+          "name": "yesMint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  121,
+                  101,
+                  115,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "noMint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  110,
+                  111,
+                  95,
+                  109,
+                  105,
+                  110,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "marketVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vaultCollateral",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "betVault"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "collateralMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "vaultLpPosition",
+          "docs": [
+            "The vault PDA's LP position on the new market."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "betVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "yesMetadata",
+          "writable": true
+        },
+        {
+          "name": "noMetadata",
+          "writable": true
+        },
+        {
+          "name": "tokenMetadataProgram",
+          "address": "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "marketId",
           "type": "u64"
         }
       ]
@@ -1831,6 +2720,189 @@ export type PmAmm = {
       ]
     },
     {
+      "name": "refundBet",
+      "docs": [
+        "Refund 1:1 when the bet vault can never launch. Closes the position."
+      ],
+      "discriminator": [
+        209,
+        182,
+        226,
+        96,
+        55,
+        121,
+        83,
+        183
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "betVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bet_vault.vault_id",
+                "account": "betVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vaultCollateral",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "betVault"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bet_vault.collateral_mint",
+                "account": "betVault"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "userCollateral",
+          "writable": true
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116,
+                  95,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "betVault"
+              },
+              {
+                "kind": "account",
+                "path": "signer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "refundCommit",
       "docs": [
         "Refund a committer 1:1 if the vault never launched."
@@ -2083,6 +3155,68 @@ export type PmAmm = {
       "args": []
     },
     {
+      "name": "resolveBetVault",
+      "docs": [
+        "Resolve the bet vault's market after expiration. Resolver only."
+      ],
+      "discriminator": [
+        87,
+        30,
+        92,
+        24,
+        68,
+        181,
+        99,
+        230
+      ],
+      "accounts": [
+        {
+          "name": "resolver",
+          "signer": true
+        },
+        {
+          "name": "betVault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bet_vault.vault_id",
+                "account": "betVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "winningSide",
+          "type": {
+            "defined": {
+              "name": "side"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "resolveGroup",
       "docs": [
         "Resolve a GroupMarket: authority picks the winning leg.",
@@ -2184,6 +3318,183 @@ export type PmAmm = {
           }
         }
       ]
+    },
+    {
+      "name": "settleBetVault",
+      "docs": [
+        "Collect the vault's winning claims from the market and freeze the payout",
+        "pool. Permissionless, once, after resolution."
+      ],
+      "discriminator": [
+        65,
+        23,
+        212,
+        137,
+        78,
+        241,
+        94,
+        127
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true
+        },
+        {
+          "name": "betVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bet_vault.vault_id",
+                "account": "betVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "marketVault",
+          "writable": true
+        },
+        {
+          "name": "vaultCollateral",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "betVault"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bet_vault.collateral_mint",
+                "account": "betVault"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "vaultLpPosition",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "betVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
     },
     {
       "name": "suggestLZero",
@@ -2621,6 +3932,184 @@ export type PmAmm = {
       ]
     },
     {
+      "name": "voidBetVault",
+      "docs": [
+        "Fallback when the resolver never resolves: after `market.end_ts +",
+        "void_grace_secs`, anyone can void the vault and `claim_bet` then refunds",
+        "every committer pro-rata to their stake."
+      ],
+      "discriminator": [
+        166,
+        7,
+        212,
+        72,
+        200,
+        96,
+        93,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true
+        },
+        {
+          "name": "betVault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  101,
+                  116,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bet_vault.vault_id",
+                "account": "betVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true
+        },
+        {
+          "name": "marketVault",
+          "writable": true
+        },
+        {
+          "name": "vaultCollateral",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "betVault"
+              },
+              {
+                "kind": "const",
+                "value": [
+                  6,
+                  221,
+                  246,
+                  225,
+                  215,
+                  101,
+                  161,
+                  147,
+                  217,
+                  203,
+                  225,
+                  70,
+                  206,
+                  235,
+                  121,
+                  172,
+                  28,
+                  180,
+                  133,
+                  237,
+                  95,
+                  91,
+                  55,
+                  145,
+                  58,
+                  140,
+                  245,
+                  133,
+                  126,
+                  255,
+                  0,
+                  169
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bet_vault.collateral_mint",
+                "account": "betVault"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "vaultLpPosition",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  112
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              },
+              {
+                "kind": "account",
+                "path": "betVault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "withdrawLiquidity",
       "docs": [
         "Withdraw LP shares: auto-claims pending residuals, then mints",
@@ -2711,6 +4200,32 @@ export type PmAmm = {
     }
   ],
   "accounts": [
+    {
+      "name": "betPosition",
+      "discriminator": [
+        29,
+        52,
+        8,
+        132,
+        175,
+        149,
+        65,
+        0
+      ]
+    },
+    {
+      "name": "betVault",
+      "discriminator": [
+        103,
+        78,
+        21,
+        234,
+        18,
+        250,
+        230,
+        209
+      ]
+    },
     {
       "name": "commitPosition",
       "discriminator": [
@@ -3053,9 +4568,264 @@ export type PmAmm = {
       "code": 6046,
       "name": "invalidVault",
       "msg": "Market vault token account does not match market.vault"
+    },
+    {
+      "code": 6047,
+      "name": "betVaultInvalidOdds",
+      "msg": "Bet vault needs stakes on both sides with odds in [1%, 99%]"
+    },
+    {
+      "code": 6048,
+      "name": "notOnAllowlist",
+      "msg": "Signer is not on this bet vault's allowlist"
+    },
+    {
+      "code": 6049,
+      "name": "allowlistTooLong",
+      "msg": "Allowlist longer than MAX_BET_ALLOWLIST"
+    },
+    {
+      "code": 6050,
+      "name": "invalidLpBps",
+      "msg": "lp_bps must be between 0 and 10_000"
+    },
+    {
+      "code": 6051,
+      "name": "betVaultNotSettled",
+      "msg": "Bet vault not settled yet"
+    },
+    {
+      "code": 6052,
+      "name": "betVaultAlreadySettled",
+      "msg": "Bet vault already settled"
+    },
+    {
+      "code": 6053,
+      "name": "invalidVoidGrace",
+      "msg": "void_grace_secs must be between 5 min and 30 days"
+    },
+    {
+      "code": 6054,
+      "name": "voidTooEarly",
+      "msg": "Void grace period has not elapsed yet"
     }
   ],
   "types": [
+    {
+      "name": "betPosition",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "yesAmount",
+            "type": "u64"
+          },
+          {
+            "name": "noAmount",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                16
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "betVault",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "resolver",
+            "docs": [
+              "Only key allowed to resolve (defaults to `authority`). Launch is",
+              "allowed to either `authority` or `resolver`."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "vaultId",
+            "type": "u64"
+          },
+          {
+            "name": "collateralMint",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "docs": [
+              "UTF-8 zero-padded name (becomes the launched market's name)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "commitEndTs",
+            "type": "i64"
+          },
+          {
+            "name": "marketEndTs",
+            "type": "i64"
+          },
+          {
+            "name": "yesTotal",
+            "type": "u64"
+          },
+          {
+            "name": "noTotal",
+            "type": "u64"
+          },
+          {
+            "name": "commitCount",
+            "type": "u32"
+          },
+          {
+            "name": "minTotal",
+            "type": "u64"
+          },
+          {
+            "name": "lpBps",
+            "docs": [
+              "Requested share of the pot deposited as liquidity, in bps (0..=10_000)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "effectiveLpBps",
+            "docs": [
+              "Share actually deposited at launch: `min(lp_bps, favourite share)`."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "allowlistLen",
+            "docs": [
+              "Number of used `allowlist` slots. 0 = anyone may commit."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "allowlist",
+            "type": {
+              "array": [
+                "pubkey",
+                8
+              ]
+            }
+          },
+          {
+            "name": "launched",
+            "type": "bool"
+          },
+          {
+            "name": "priceBps",
+            "docs": [
+              "Launch price (bps of YES) = odds implied by the stakes."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "market",
+            "docs": [
+              "The launched Market PDA. `Pubkey::default()` pre-launch."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "winningSide",
+            "docs": [
+              "Set by `settle_bet_vault`: 1 = YES, 2 = NO."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "settled",
+            "type": "bool"
+          },
+          {
+            "name": "payoutPool",
+            "docs": [
+              "Vault collateral balance frozen at settlement — what winners split."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "claimedStake",
+            "docs": [
+              "Winning-side stake already claimed, and USDC paid for it (dust sweep)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "paidOut",
+            "type": "u64"
+          },
+          {
+            "name": "refunding",
+            "docs": [
+              "Set by the first `refund_bet`: the vault can then never launch, so a",
+              "partial refund can't flip it back to launchable and trap the rest."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "voidGraceSecs",
+            "docs": [
+              "Grace period after `market.end_ts` before `void_bet_vault` opens."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "voided",
+            "docs": [
+              "Set by `void_bet_vault`: the resolver never showed up, so `claim_bet`",
+              "refunds every committer pro-rata to their stake instead of paying the",
+              "winning side."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                54
+              ]
+            }
+          }
+        ]
+      }
+    },
     {
       "name": "commitPosition",
       "type": {
@@ -3235,11 +5005,24 @@ export type PmAmm = {
             "type": "u8"
           },
           {
+            "name": "launchExcessYes",
+            "docs": [
+              "Entry-side surplus of the launch deposit (whole pot). Split pro-rata to",
+              "committers in `claim_committer`. Carved from `_reserved` (was 32 bytes):",
+              "vaults launched before this field existed read 0."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "launchExcessNo",
+            "type": "u64"
+          },
+          {
             "name": "reserved",
             "type": {
               "array": [
                 "u8",
-                32
+                16
               ]
             }
           }
@@ -3523,6 +5306,19 @@ export type PmAmm = {
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "excessYes",
+            "docs": [
+              "Entry-side surplus owed to this LP (see `Market::unclaimed_excess_*`).",
+              "Fits in the former 16-byte tail padding, so LEN is unchanged and",
+              "pre-existing positions read as 0."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "excessNo",
+            "type": "u64"
           }
         ]
       }
@@ -3628,6 +5424,14 @@ export type PmAmm = {
           {
             "name": "group",
             "type": "pubkey"
+          },
+          {
+            "name": "unclaimedExcessYes",
+            "type": "u64"
+          },
+          {
+            "name": "unclaimedExcessNo",
+            "type": "u64"
           }
         ]
       }

@@ -8,6 +8,7 @@
  * account structs. `PmAmmClient` exposes bound wrappers (no programId arg).
  */
 import { PublicKey } from "@solana/web3.js";
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { u64SeedLE } from "./encoding";
 import { SEEDS, METAPLEX_PROGRAM_ID } from "./constants";
 
@@ -108,6 +109,38 @@ export function deriveCommitGroupPositionPda(
     [seed(SEEDS.COMMIT_GROUP), vault.toBuffer(), owner.toBuffer()],
     programId,
   )[0];
+}
+
+// ----------------------------------------------------------------------------
+// Bet Vault v2
+// ----------------------------------------------------------------------------
+
+/** Bet vault account (seed ["bet_vault", u64(vaultId)]). */
+export function deriveBetVaultPda(programId: PublicKey, vaultId: number | bigint): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [seed(SEEDS.BET_VAULT), u64SeedLE(vaultId)],
+    programId,
+  )[0];
+}
+
+/** Per-committer bet position (seed ["bet_position", betVault, owner]). */
+export function deriveBetPositionPda(
+  programId: PublicKey,
+  betVault: PublicKey,
+  owner: PublicKey,
+): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [seed(SEEDS.BET_POSITION), betVault.toBuffer(), owner.toBuffer()],
+    programId,
+  )[0];
+}
+
+/** The bet vault PDA's collateral ATA (also receives the market's creator fee). */
+export function deriveBetVaultCollateral(
+  betVault: PublicKey,
+  collateralMint: PublicKey,
+): PublicKey {
+  return getAssociatedTokenAddressSync(collateralMint, betVault, true);
 }
 
 // ----------------------------------------------------------------------------

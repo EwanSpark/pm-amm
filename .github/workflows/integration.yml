@@ -41,6 +41,14 @@ jobs:
           sh -c "$(curl -sSfL https://release.anza.xyz/v2.2.14/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
+      - name: Install surfpool
+        # `anchor test` (Anchor 1.0) spawns surfpool, not solana-test-validator.
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL https://github.com/txtx/surfpool/releases/latest/download/surfpool-linux-x64.tar.gz \
+            | tar xz -C "$HOME/.local/bin" surfpool
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
       - name: Install Anchor CLI (1.0.1)
         run: |
           cargo install --git https://github.com/coral-xyz/anchor --tag v1.0.1 anchor-cli --locked
@@ -56,10 +64,28 @@ jobs:
       - name: Install root deps
         run: pnpm install
 
+      - name: Install anchor test deps
+        # `anchor/` is outside the pnpm workspace (own lockfile), so the root
+        # install doesn't bring ts-mocha / chai — and without
+        # --ignore-workspace pnpm walks up and reinstalls the root workspace.
+        working-directory: anchor
+        run: pnpm install --frozen-lockfile --ignore-workspace
+
       - name: Generate local wallet
         run: |
           mkdir -p ~/.config/solana
           solana-keygen new --no-bip39-passphrase --silent --outfile ~/.config/solana/id.json
+
+      - name: Point the program ID at a CI keypair
+        working-directory: anchor
+        # The real program keypair (GV1F…) is gitignored, so `anchor build`
+        # would generate a fresh one and abort on the declare_id! mismatch.
+        # Sync declare_id! + [programs.localnet] to a CI-only key instead; the
+        # tests resolve the program ID from the regenerated IDL.
+        run: |
+          mkdir -p target/deploy
+          [ -f target/deploy/pm_amm-keypair.json ] || solana-keygen new --no-bip39-passphrase --silent --outfile target/deploy/pm_amm-keypair.json
+          anchor keys sync
 
       - name: Anchor build (with IDL regen)
         working-directory: anchor
@@ -67,6 +93,6 @@ jobs:
 
       - name: Anchor test (spawns localnet)
         working-directory: anchor
-        # `anchor test` boots `solana-test-validator`, deploys the program, runs
-        # ts-mocha against tests/**/*.ts, then tears the validator down.
+        # `anchor test` boots surfpool, deploys the program, runs
+        # ts-mocha against tests/**/*.ts, then tears surfpool down.
         run: anchor test --skip-lint

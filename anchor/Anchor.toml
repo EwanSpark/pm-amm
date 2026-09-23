@@ -23,7 +23,9 @@ cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "pnpm exec ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+# Unit-ish suites first, then the long real-time lifecycle suites (they wait
+# for the validator clock and would otherwise skew the others' wall-clock math).
+test = "pnpm exec ts-mocha -p ./tsconfig.json -t 3000000 tests/*.ts tests/lifecycle/*.ts"
 
 [hooks]
 

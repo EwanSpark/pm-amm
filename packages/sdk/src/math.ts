@@ -236,10 +236,11 @@ export function simulateLpDeposit(
 
   if (lZero <= 0) return { newShares: 0, poolSharePct: 0, newPoolValue: 0, estDailyYield: 0 };
 
-  // Fix #1 (full collateralization): shares are 1:1 with USDC of backing, and a
-  // follow-up deposit adds L_eff for `amount` at the worst-case side
-  // (max(x, y) = amount), matching deposit_liquidity on-chain. The vault always
-  // covers the bigger side, so this mirrors that calibration, not V(P).
+  // Fix #1 (full collateralization): a follow-up deposit adds L_eff for
+  // `amount` at the worst-case side (max(x, y) = amount), matching
+  // deposit_liquidity on-chain. The vault always covers the bigger side, so
+  // this mirrors that calibration, not V(P). Shares are minted in proportion
+  // to the L added (L_eff and L_0 scale together), not 1 per USDC.
   const u = phiInv(price);
   const pu = phi(u);
   const cY = u * price + pu; // y reserve coefficient
@@ -247,12 +248,13 @@ export function simulateLpDeposit(
   const cMax = Math.max(cX, cY);
   if (cMax <= 0) return { newShares: 0, poolSharePct: 0, newPoolValue: 0, estDailyYield: 0 };
 
-  const newShares = amount;
+  // L_eff added by the deposit: amount / cMax (L_0 is linear in budget).
+  const lEffIncrement = amount / cMax;
+  const newShares = (totalShares * lEffIncrement) / lEff;
   const newTotal = totalShares + newShares;
   const poolSharePct = (newShares / newTotal) * 100;
 
-  // New L_eff after deposit: L_eff += amount / cMax (L_0 is linear in budget).
-  const newLEff = lEff + amount / cMax;
+  const newLEff = lEff + lEffIncrement;
   const newPoolValue = poolValue(price, newLEff);
 
   const estDailyYield =
@@ -442,4 +444,46 @@ export function formatTimeRemaining(endTs: number): string {
   if (days > 0) return `${days}d ${hours}h`;
   const mins = Math.floor((remaining % 3600) / 60);
   return `${hours}h ${mins}m`;
+}
+
+// ----------------------------------------------------------------------------
+// Bet Vault v2 — pure mirrors of the on-chain rules, for previews in the UI
+// ----------------------------------------------------------------------------
+
+/** Odds implied by the stakes, in bps of YES (the launch price). */
+export function betOddsBps(yesTotal: number, noTotal: number): number {
+  const total = yesTotal + noTotal;
+  return total > 0 ? Math.floor((yesTotal * 10_000) / total) : 0;
+}
+
+/**
+ * Share of the pot actually deposited as liquidity at launch: `lpBps` capped at
+ * the favourite's stake share (`BetVault::effective_lp_bps`). The cap is what
+ * guarantees a winner never receives less than they staked.
+ */
+export function betEffectiveLpBps(yesTotal: number, noTotal: number, lpBps: number): number {
+  const p = betOddsBps(yesTotal, noTotal);
+  return Math.min(lpBps, Math.max(p, 10_000 - p));
+}
+
+/**
+ * Collateral kept out of the AMM — the floor the winning side always shares,
+ * whatever outside traders do. Show it as the "guaranteed minimum".
+ */
+export function betKeptCollateral(yesTotal: number, noTotal: number, lpBps: number): number {
+  const total = BigInt(Math.floor(yesTotal + noTotal));
+  const kept = BigInt(10_000 - betEffectiveLpBps(yesTotal, noTotal, lpBps));
+  return Number((total * kept) / 10_000n); // BigInt: raw × bps overflows float64
+}
+
+/**
+ * A stake's slice of a settled pool: `pool × stake / basis`, where `basis` is
+ * the winning side's total (or every stake once the vault is voided). On-chain
+ * the claim that completes `basis` also sweeps the rounding dust, so the last
+ * claimer can get a lamport or two more than this.
+ */
+export function betPayout(pool: number, stake: number, basis: number): number {
+  if (basis <= 0) return 0;
+  // BigInt: pool × stake in raw units blows past float64's exact range.
+  return Number((BigInt(Math.floor(pool)) * BigInt(Math.floor(stake))) / BigInt(Math.floor(basis)));
 }

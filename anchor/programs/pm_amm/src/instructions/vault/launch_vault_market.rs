@@ -7,20 +7,10 @@
 //!      (`yes_total / total`) → bps, clamped to `[100, 9900]`.
 //!   2. Initialize the underlying binary market via internal call (NOT a CPI
 //!      to ourselves — direct call to `initialize_market::handler`).
-//!   3. Transfer the vault's aggregated USDC into the market vault as a
-//!      `deposit_liquidity` for the vault PDA itself. LP shares are minted
-//!      to a vault-owned LpPosition.
-//!
-//! This first version mirrors a `deposit_liquidity` call done by the vault
-//! PDA — but to keep things implementation-simple, we open the market with
-//! `initial_price_bps` and let the regular `deposit_liquidity` instruction
-//! be called afterwards by a separate keeper/UI tx (the vault holds the
-//! USDC and signs as the depositor). For atomicity-critical use cases, a
-//! follow-up version can inline the bootstrap.
-//!
-//! NOTE: this v1 only initializes the market here. The vault's `deposit_
-//! liquidity` is a separate UI tx (we keep the vault's USDC in
-//! `vault_collateral` and the UI / keeper triggers the deposit).
+//!   3. Deposit the whole pot as liquidity (audit #6, option C): calibrate
+//!      `max(x, y) = total`, record the entry-side surplus, and move the USDC
+//!      into the market vault. Committers materialize their LP slice (shares
+//!      + surplus) in `claim_committer`.
 
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program::invoke_signed;
@@ -169,6 +159,13 @@ pub fn handler(ctx: Context<LaunchVaultMarket>, market_id: u64) -> Result<()> {
     market.set_l_zero_fixed(l_zero);
     market.set_reserve_yes_fixed(x);
     market.set_reserve_no_fixed(y);
+    // Entry-side surplus of the whole pot: owed to committers pro-rata, credited
+    // to their LpPosition in `claim_committer` (counted by the solvency guard).
+    let (excess_yes, excess_no) = crate::state::deposit_excess(total, x, y);
+    market.unclaimed_excess_yes = excess_yes;
+    market.unclaimed_excess_no = excess_no;
+    vault.launch_excess_yes = excess_yes;
+    vault.launch_excess_no = excess_no;
     market.last_accrual_ts = now;
     market.cum_yes_per_share = 0;
     market.cum_no_per_share = 0;
@@ -253,7 +250,7 @@ pub fn handler(ctx: Context<LaunchVaultMarket>, market_id: u64) -> Result<()> {
     Ok(())
 }
 
-fn truncate_str(s: &str, max_len: usize) -> String {
+pub(crate) fn truncate_str(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         s.to_string()
     } else {
@@ -266,7 +263,7 @@ fn truncate_str(s: &str, max_len: usize) -> String {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn create_token_metadata<'info>(
+pub(crate) fn create_token_metadata<'info>(
     metadata_ai: AccountInfo<'info>,
     mint_ai: AccountInfo<'info>,
     authority_ai: AccountInfo<'info>,

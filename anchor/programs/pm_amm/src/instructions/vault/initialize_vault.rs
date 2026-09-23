@@ -94,7 +94,9 @@ pub fn handler(
     vault.market = Pubkey::default();
     vault.lp_position = Pubkey::default();
     vault.bump = ctx.bumps.vault;
-    vault._reserved = [0u8; 32];
+    vault.launch_excess_yes = 0;
+    vault.launch_excess_no = 0;
+    vault._reserved = [0u8; 16];
 
     msg!(
         "Vault {} opened: commit_end={}, market_end={}, min_total={}",

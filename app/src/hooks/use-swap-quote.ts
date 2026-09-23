@@ -11,6 +11,7 @@ import {
 import { getAssociatedTokenAddress } from "@solana/spl-token";
 import { USDC_MINT } from "@/lib/constants";
 import { getClient } from "@/lib/pm-amm-client";
+import { creatorFeeAtaIxs, marketAuthority } from "@/lib/swap-fees";
 import { estimateSwapOutput } from "@pm-amm/sdk/math";
 import type { SwapDirection } from "@pm-amm/sdk";
 import { PROTOCOL_DAO, SWAP_FEE_BPS } from "@pm-amm/sdk";
@@ -149,10 +150,13 @@ async function tryOnChainQuote(
         ataIxs.push(createAssociatedTokenAccountInstruction(publicKey, ata, publicKey, mint));
       }
     }
-    // Include the DAO fee ATA (off-curve owner) so the sim doesn't fail on a
-    // missing required account. We quote with creatorUsdc=null (signer treated
-    // as creator) — the output is identical either way, and it avoids a market
-    // fetch + a possibly-missing creator ATA on every keystroke.
+    // Fee ATAs so the sim doesn't fail on a missing required account: the DAO
+    // (off-curve owner) and the creator. `creatorUsdc = null` is creator-only
+    // on-chain, so a trader's quote must pass the real creator ATA (authority
+    // cached per market — it never changes).
+    const creator = await marketAuthority(client, market);
+    if (!creator) return null;
+    ataIxs.push(...(await creatorFeeAtaIxs(connection, publicKey, collatMint, creator)));
     const daoUsdc = await getAssociatedTokenAddress(collatMint, PROTOCOL_DAO, true);
     if (!(await connection.getAccountInfo(daoUsdc))) {
       ataIxs.push(
@@ -189,7 +193,7 @@ async function tryOnChainQuote(
       direction,
       amountIn: lamports,
       minOutput: 0,
-      creatorAuthority: publicKey, // quote with creatorUsdc=null (output is identical)
+      creatorAuthority: creator,
       collateralMint: collatMint,
     });
 

@@ -241,6 +241,8 @@ mod tests {
             name: [0u8; 64],
             initial_price_bps: 0,
             group: Pubkey::default(),
+            unclaimed_excess_yes: 0,
+            unclaimed_excess_no: 0,
         };
 
         market.set_l_zero_fixed(l_zero_fixed);
