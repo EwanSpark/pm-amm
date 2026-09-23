@@ -162,7 +162,7 @@ when it is, a follow-up sprint can adapt leg seeding to use `mint_pair` instead 
 ## Current Sprint
 
 Sprint 25 (branch `feat/bet-vault-v2`, NOT deployed) — Bet Vault v2 + entry-side
-surplus fix. Spec + open items: `doc/sprints/sprint-25-bet-vault-v2.md`.
+surplus fix. Spec + open items: `doc/bet-vault-v2.md`.
 - **Surplus fix**: calibrating `max(x, y) = deposit` locked collateral that no
   token could claim (73.37 USDC per 100 deposited at 70%). It is now credited as
   `LpPosition::excess_*` / `Market::unclaimed_excess_*` (carved from padding, so
