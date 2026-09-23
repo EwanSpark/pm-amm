@@ -41,6 +41,14 @@ jobs:
           sh -c "$(curl -sSfL https://release.anza.xyz/v2.2.14/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
+      - name: Install surfpool
+        # `anchor test` (Anchor 1.0) spawns surfpool, not solana-test-validator.
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL https://github.com/txtx/surfpool/releases/latest/download/surfpool-linux-x64.tar.gz \
+            | tar xz -C "$HOME/.local/bin" surfpool
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
       - name: Install Anchor CLI (1.0.1)
         run: |
           cargo install --git https://github.com/coral-xyz/anchor --tag v1.0.1 anchor-cli --locked
@@ -78,6 +86,6 @@ jobs:
 
       - name: Anchor test (spawns localnet)
         working-directory: anchor
-        # `anchor test` boots `solana-test-validator`, deploys the program, runs
-        # ts-mocha against tests/**/*.ts, then tears the validator down.
+        # `anchor test` boots surfpool, deploys the program, runs
+        # ts-mocha against tests/**/*.ts, then tears surfpool down.
         run: anchor test --skip-lint
