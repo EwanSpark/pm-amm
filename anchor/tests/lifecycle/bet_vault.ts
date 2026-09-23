@@ -346,6 +346,23 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
     return (await bal(u.usdc)) - before;
   }
 
+  const deposit = (u: User, market: PublicKey, usd: number) =>
+    m
+      .depositLiquidity(new anchor.BN(usd * ONE))
+      .accountsPartial({
+        signer: u.kp.publicKey,
+        market,
+        collateralMint: usdcMint,
+        vault: marketPdas(market).vault,
+        userCollateral: u.usdc,
+        lpPosition: lpPda(market, u.kp.publicKey),
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .preInstructions([CU])
+      .signers([u.kp])
+      .rpc();
+
   const claimResiduals = async (u: { kp: Keypair }, market: PublicKey) => {
     const p = marketPdas(market);
     await m
@@ -562,6 +579,21 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
     assert.equal(mk.unclaimedExcessYes.toString(), lp.excessYes.toString());
   });
 
+  it("a follow-up deposit at 70% credits its own surplus (second LP)", async () => {
+    const mk0 = await accs.market.fetch(legacy.market!);
+    await deposit(carol, legacy.market!, 50);
+    const lp = await accs.lpPosition.fetch(lpPda(legacy.market!, carol.kp.publicKey));
+    const mk1 = await accs.market.fetch(legacy.market!);
+    // Half the first deposit at the same price → about half its surplus, and
+    // the market counter is the sum of both LPs' claims.
+    approx(lp.excessYes.toNumber(), 36.68, 0.3, "2nd LP excess YES");
+    assert.isAtMost(lp.excessNo.toNumber(), 1);
+    assert.equal(
+      mk1.unclaimedExcessYes.toNumber() - mk0.unclaimedExcessYes.toNumber(),
+      lp.excessYes.toNumber(),
+    );
+  });
+
   it("swap without the creator fee account is creator-only", async () => {
     await expectErr(buy(carol, legacy.market!, "yes", 1, null), "Unauthorized");
   });
@@ -640,9 +672,19 @@ describe("bet_vault v2 + entry-side surplus fix", () => {
     assert.isAtMost(await bal(marketPdas(bets.D.market!).vault), DUST);
   });
 
-  it("regular deposit at 70%: LP recovers the full 100, market vault ≈ 0", async () => {
+  it("regular deposits at 70%: both LPs recover their stake, market ≈ 0", async () => {
     await claimResiduals(owner, legacy.market!);
-    approx(await claimWinnings(owner, legacy.market!), 100, 0.01, "LP");
+    const first = await claimWinnings(owner, legacy.market!);
+    await claimResiduals(carol, legacy.market!);
+    const second = await claimWinnings(carol, legacy.market!);
+    // 150 deposited, 150 paid out: nothing is created or stranded. The split
+    // drifts by ~0.03% of the later deposit (fixed-point rounding in the L_0
+    // increment leaves that much with the earlier LP) — never the other way,
+    // which is what would under-collateralize the pool.
+    approx(first + second, 150, 0.01, "both LPs");
+    approx(first, 100, 0.1, "first LP");
+    approx(second, 50, 0.1, "second LP");
+    assert.isAtLeast(first, 100 * ONE, "earlier LP is never short");
     assert.isAtMost(await bal(marketPdas(legacy.market!).vault), DUST);
   });
 
