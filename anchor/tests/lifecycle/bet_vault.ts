@@ -41,7 +41,7 @@ import {
 import { assert } from "chai";
 
 const METAPLEX = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
-const PROTOCOL_DAO = new PublicKey("HKLjYENZaFghSp2TM5VJad32wVu7d2XCMJZqKGTQ3ZeL");
+const PROTOCOL_DAO = new PublicKey("4qXyczAr5DuBVaHUwmZT5Xt6hgQ6RwqBYcFGtrv8QEph");
 const COMMIT_SECS = 60;
 const MARKET_SECS = 345; // launch needs market_end > now + 300
 const ONE = 1_000_000; // 1 USDC (6 dp)

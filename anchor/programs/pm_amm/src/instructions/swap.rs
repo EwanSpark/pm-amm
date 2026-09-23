@@ -23,7 +23,7 @@ use crate::state::Market;
 pub const SWAP_FEE_BPS: u64 = 200;
 
 /// Protocol DAO (Combinator Predict) — receives 50% of the swap fee.
-pub const PROTOCOL_DAO: Pubkey = pubkey!("HKLjYENZaFghSp2TM5VJad32wVu7d2XCMJZqKGTQ3ZeL");
+pub const PROTOCOL_DAO: Pubkey = pubkey!("4qXyczAr5DuBVaHUwmZT5Xt6hgQ6RwqBYcFGtrv8QEph");
 
 /// `amount * SWAP_FEE_BPS / 10_000` in u128 to avoid overflow.
 #[inline(always)]

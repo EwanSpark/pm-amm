@@ -12,7 +12,7 @@ export const METAPLEX_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybz
 /** Protocol DAO (Combinator Predict) — receives 50% of the swap fee. The other
  *  50% goes to the market creator (`market.authority`). Must match `PROTOCOL_DAO`
  *  in the program. */
-export const PROTOCOL_DAO = new PublicKey("HKLjYENZaFghSp2TM5VJad32wVu7d2XCMJZqKGTQ3ZeL");
+export const PROTOCOL_DAO = new PublicKey("4qXyczAr5DuBVaHUwmZT5Xt6hgQ6RwqBYcFGtrv8QEph");
 
 /** Swap fee in basis points (2%). Must match `SWAP_FEE_BPS` in the program. */
 export const SWAP_FEE_BPS = 200;
