@@ -256,7 +256,12 @@ describe("pm_amm", () => {
       trader.publicKey,
     );
     await mintTo(provider.connection, payer, collateralMint, traderUsdc, payer, 1_000_000_000);
-    const traderYes = await createAccount(provider.connection, payer, pdas.yesMint, trader.publicKey);
+    const traderYes = await createAccount(
+      provider.connection,
+      payer,
+      pdas.yesMint,
+      trader.publicKey,
+    );
     const traderNo = await createAccount(provider.connection, payer, pdas.noMint, trader.publicKey);
 
     // creator_usdc = userUsdc (owned by `authority` = the market creator),

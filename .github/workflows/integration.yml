@@ -61,6 +61,17 @@ jobs:
           mkdir -p ~/.config/solana
           solana-keygen new --no-bip39-passphrase --silent --outfile ~/.config/solana/id.json
 
+      - name: Point the program ID at a CI keypair
+        working-directory: anchor
+        # The real program keypair (GV1F…) is gitignored, so `anchor build`
+        # would generate a fresh one and abort on the declare_id! mismatch.
+        # Sync declare_id! + [programs.localnet] to a CI-only key instead; the
+        # tests resolve the program ID from the regenerated IDL.
+        run: |
+          mkdir -p target/deploy
+          [ -f target/deploy/pm_amm-keypair.json ] || solana-keygen new --no-bip39-passphrase --silent --outfile target/deploy/pm_amm-keypair.json
+          anchor keys sync
+
       - name: Anchor build (with IDL regen)
         working-directory: anchor
         run: anchor build

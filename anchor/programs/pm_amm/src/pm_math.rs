@@ -1513,7 +1513,6 @@ mod tests {
             let (x_ref, y_ref) = reserves_from_price(p, l).unwrap();
 
             // find_x_from_y: given y_ref, find x → should match x_ref
-            let x_found = find_x_from_y(y_ref, l).unwrap();
             let x_ref_f: f64 = x_ref.to_num();
             let x_found = find_x_from_y(y_ref, l).unwrap();
             let diff_x: f64 = (x_found - x_ref).to_num::<f64>().abs();
