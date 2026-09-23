@@ -64,6 +64,12 @@ jobs:
       - name: Install root deps
         run: pnpm install
 
+      - name: Install anchor test deps
+        # `anchor/` is outside the pnpm workspace (own lockfile), so the root
+        # install doesn't bring ts-mocha / chai.
+        working-directory: anchor
+        run: pnpm install --frozen-lockfile
+
       - name: Generate local wallet
         run: |
           mkdir -p ~/.config/solana
