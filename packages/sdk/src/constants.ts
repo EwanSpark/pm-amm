@@ -45,6 +45,8 @@ export const SEEDS = {
   VAULT_GROUP: "vault_group",
   VAULT_GROUP_COLLATERAL: "vault_group_collateral",
   COMMIT_GROUP: "commit_group",
+  BET_VAULT: "bet_vault",
+  BET_POSITION: "bet_position",
   METADATA: "metadata",
 } as const;
 

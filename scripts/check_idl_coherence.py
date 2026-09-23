@@ -26,7 +26,7 @@ EXPECTED = {
         "last_accrual_ts", "cum_yes_per_share", "cum_no_per_share",
         "total_yes_distributed", "total_no_distributed", "total_lp_shares",
         "resolved", "winning_side", "bump", "name", "initial_price_bps",
-        "group",
+        "group", "unclaimed_excess_yes", "unclaimed_excess_no",
     ],
     "GroupMarket": [
         "authority", "group_id", "start_ts", "end_ts", "leg_count", "legs",
@@ -36,13 +36,14 @@ EXPECTED = {
     "LpPosition": [
         "owner", "market", "shares", "collateral_deposited",
         "yes_per_share_checkpoint", "no_per_share_checkpoint", "bump",
+        "excess_yes", "excess_no",
     ],
     "CommitmentVault": [
         "authority", "vault_id", "collateral_mint", "name",
         "commit_end_ts", "market_end_ts",
         "yes_total", "no_total", "commit_count", "min_total",
         "launched", "winning_price_bps", "market", "lp_position",
-        "bump", "_reserved",
+        "bump", "launch_excess_yes", "launch_excess_no", "_reserved",
     ],
     "CommitPosition": [
         "vault", "owner", "yes_amount", "no_amount", "claimed", "bump", "_reserved",
@@ -57,6 +58,17 @@ EXPECTED = {
     ],
     "CommitPositionGroup": [
         "vault", "owner", "leg_amounts", "claimed", "bump", "_reserved",
+    ],
+    "BetVault": [
+        "authority", "resolver", "vault_id", "collateral_mint", "name",
+        "commit_end_ts", "market_end_ts", "yes_total", "no_total",
+        "commit_count", "min_total", "lp_bps", "effective_lp_bps",
+        "allowlist_len", "allowlist", "launched", "price_bps", "market",
+        "winning_side", "settled", "payout_pool", "claimed_stake", "paid_out",
+        "refunding", "bump", "_reserved",
+    ],
+    "BetPosition": [
+        "vault", "owner", "yes_amount", "no_amount", "bump", "_reserved",
     ],
 }
 

@@ -275,4 +275,68 @@ pub mod pm_amm {
     pub fn refund_commit_group(ctx: Context<RefundCommitGroup>) -> Result<()> {
         instructions::vault::refund_commit_group::handler(ctx)
     }
+
+    // ========================================================================
+    // Bet Vault v2 — winner takes the pot, the pot is the liquidity
+    // ========================================================================
+
+    /// Open a bet vault. `lp_bps` = share of the pot deposited as liquidity at
+    /// launch (capped at the favourite's stake share). `resolver` =
+    /// `Pubkey::default()` → the caller. Empty `allowlist` → anyone may commit.
+    pub fn initialize_bet_vault(
+        ctx: Context<InitializeBetVault>,
+        vault_id: u64,
+        name: String,
+        commit_duration_secs: i64,
+        market_duration_secs: i64,
+        min_total: u64,
+        lp_bps: u16,
+        resolver: Pubkey,
+        allowlist: Vec<Pubkey>,
+    ) -> Result<()> {
+        instructions::bet::initialize_bet_vault::handler(
+            ctx,
+            vault_id,
+            name,
+            commit_duration_secs,
+            market_duration_secs,
+            min_total,
+            lp_bps,
+            resolver,
+            allowlist,
+        )
+    }
+
+    /// Stake on YES or NO until commit_end_ts (allowlist enforced if set).
+    pub fn bet_commit(ctx: Context<BetCommit>, side: Side, amount: u64) -> Result<()> {
+        instructions::bet::bet_commit::handler(ctx, side, amount)
+    }
+
+    /// Launch the market at the stake-implied odds. Authority or resolver only.
+    /// The vault PDA becomes market.authority (resolution + creator fee).
+    pub fn launch_bet_vault(ctx: Context<LaunchBetVault>, market_id: u64) -> Result<()> {
+        instructions::bet::launch_bet_vault::handler(ctx, market_id)
+    }
+
+    /// Resolve the bet vault's market after expiration. Resolver only.
+    pub fn resolve_bet_vault(ctx: Context<ResolveBetVault>, winning_side: Side) -> Result<()> {
+        instructions::bet::resolve_bet_vault::handler(ctx, winning_side)
+    }
+
+    /// Collect the vault's winning claims from the market and freeze the payout
+    /// pool. Permissionless, once, after resolution.
+    pub fn settle_bet_vault(ctx: Context<SettleBetVault>) -> Result<()> {
+        instructions::bet::settle_bet_vault::handler(ctx)
+    }
+
+    /// Winners take `pool × stake / winning_total`; losers get 0. Closes the
+    /// position.
+    pub fn claim_bet(ctx: Context<ClaimBet>) -> Result<()> {
+        instructions::bet::claim_bet::handler(ctx)
+    }
+
+    /// Refund 1:1 when the bet vault can never launch. Closes the position.
+    pub fn refund_bet(ctx: Context<RefundBet>) -> Result<()> {
+        instructions::bet::refund_bet::handler(ctx)
+    }
 }

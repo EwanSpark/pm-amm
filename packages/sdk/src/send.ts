@@ -20,6 +20,7 @@ import type {
   CreateMarketInput,
   CreateVaultInput,
   CreateVaultGroupInput,
+  CreateBetVaultInput,
 } from "./types/args";
 
 const usdc = (human: number): number => Math.floor(human * 1e6);
@@ -106,11 +107,13 @@ export function makeSend(client: PmAmmClient) {
       // Creator ATA only when the swapper is NOT the creator (otherwise the
       // creator keeps their share and `creatorUsdc` is passed as null).
       if (!authority.equals(signer)) {
+        // Off-curve allowed: a bet vault's authority is its PDA.
         const { ix: creatorAta } = await ensureAtaIx(
           client.connection,
           signer,
           authority,
           collateralMint,
+          true,
         );
         if (creatorAta) pre.push(creatorAta);
       }
@@ -236,6 +239,8 @@ export function makeSend(client: PmAmmClient) {
       return client.sendIxs([computeBudgetIx(CU.DEFAULT), ix]);
     },
 
+    ...makeBetSend(client, ataPreIxs),
+
     // ---- multi-outcome commitment vault ----
     async createVaultGroup(input: CreateVaultGroupInput) {
       if (input.legNames.length < 2 || input.legNames.length > 8) {
@@ -299,6 +304,105 @@ export function makeSend(client: PmAmmClient) {
       const signer = client.walletPubkey();
       const ix = await client.ix.refundCommitGroup({ signer, vault });
       return client.sendIxs([computeBudgetIx(CU.DEFAULT), ix]);
+    },
+  };
+}
+
+/** `send.*` wrappers for Bet Vault v2. Amounts are human units of the vault's collateral. */
+function makeBetSend(
+  client: PmAmmClient,
+  ataPreIxs: (mints: PublicKey[]) => Promise<TransactionInstruction[]>,
+) {
+  async function vaultCollateral(betVault: PublicKey) {
+    const v = await client.fetchBetVault(betVault);
+    if (!v) throw new Error("bet vault not found");
+    const mint = v.collateralMint as PublicKey;
+    return { v, mint, decimals: (await getMint(client.connection, mint)).decimals };
+  }
+
+  return {
+    async createBetVault(input: CreateBetVaultInput) {
+      const authority = client.walletPubkey();
+      const vaultId = randomU48();
+      const collateralMint = input.collateralMint ?? client.collateralMint;
+      const decimals = (await getMint(client.connection, collateralMint)).decimals;
+      const ix = await client.ix.initializeBetVault({
+        authority,
+        vaultId,
+        name: input.name,
+        commitDurationSecs: input.commitDurationSecs,
+        marketDurationSecs: input.marketDurationSecs,
+        minTotal: toRaw(input.minTotal, decimals),
+        lpBps: input.lpBps ?? 5000,
+        resolver: input.resolver,
+        allowlist: input.allowlist,
+        collateralMint,
+      });
+      const signature = await client.sendIxs([computeBudgetIx(CU.DEFAULT), ix]);
+      return { vaultId, betVaultPda: client.betVaultPda(vaultId).toBase58(), signature };
+    },
+
+    async betCommit(betVault: PublicKey, side: Side, amount: number) {
+      const signer = client.walletPubkey();
+      const { mint, decimals } = await vaultCollateral(betVault);
+      const pre = await ataPreIxs([mint]);
+      const ix = await client.ix.betCommit({
+        signer,
+        betVault,
+        side,
+        amount: toRaw(amount, decimals),
+        collateralMint: mint,
+      });
+      return client.sendIxs([computeBudgetIx(CU.DEFAULT), ...pre, ix]);
+    },
+
+    async launchBetVault(betVault: PublicKey) {
+      const payer = client.walletPubkey();
+      const { mint } = await vaultCollateral(betVault);
+      const marketId = randomU48();
+      const ix = await client.ix.launchBetVault({
+        payer,
+        betVault,
+        marketId,
+        collateralMint: mint,
+      });
+      const signature = await client.sendIxs([computeBudgetIx(CU.HEAVY), ix]);
+      return { marketId, marketPda: client.marketPda(marketId).toBase58(), signature };
+    },
+
+    async resolveBetVault(betVault: PublicKey, side: Side) {
+      const { v } = await vaultCollateral(betVault);
+      const resolver = client.walletPubkey();
+      const ix = await client.ix.resolveBetVault({ resolver, betVault, market: v.market, side });
+      return client.sendIxs([computeBudgetIx(CU.DEFAULT), ix]);
+    },
+
+    async settleBetVault(betVault: PublicKey) {
+      const { v, mint } = await vaultCollateral(betVault);
+      const signer = client.walletPubkey();
+      const ix = await client.ix.settleBetVault({
+        signer,
+        betVault,
+        market: v.market,
+        collateralMint: mint,
+      });
+      return client.sendIxs([computeBudgetIx(CU.DEFAULT), ix]);
+    },
+
+    async claimBet(betVault: PublicKey) {
+      const signer = client.walletPubkey();
+      const { mint } = await vaultCollateral(betVault);
+      const pre = await ataPreIxs([mint]);
+      const ix = await client.ix.claimBet({ signer, betVault, collateralMint: mint });
+      return client.sendIxs([computeBudgetIx(CU.DEFAULT), ...pre, ix]);
+    },
+
+    async refundBet(betVault: PublicKey) {
+      const signer = client.walletPubkey();
+      const { mint } = await vaultCollateral(betVault);
+      const pre = await ataPreIxs([mint]);
+      const ix = await client.ix.refundBet({ signer, betVault, collateralMint: mint });
+      return client.sendIxs([computeBudgetIx(CU.DEFAULT), ...pre, ix]);
     },
   };
 }

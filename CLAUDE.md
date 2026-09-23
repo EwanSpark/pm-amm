@@ -11,7 +11,7 @@ Built for the $PREDICT hackathon. Deadline: April 26, 2026.
 - **Program ID**: `GV1FMGHRYBjQLaghE5fnGuYCuCcpdt3GD5xEX3TwN16y`
 - **USDC mock mint**: `3WQ8hCqTNwjrh8WzE2XyoZoUrd1miPcwWfMkmFPUMEWZ` (6 decimals, mint authority = `6NG87…`) — unchanged across redeploys (the mint is independent of the program ID)
 - **Upgrade authority**: `6NG87yZrQw6zH6Au8fHbYcD7Dken5smAzisLeXazpt8E` (single-key — move to multisig before mainnet)
-- **TS SDK**: `@pm-amm/sdk` (`packages/sdk`) — wraps all 26 instructions + PDAs + reads + math; the front consumes it.
+- **TS SDK**: `@pm-amm/sdk` (`packages/sdk`) — wraps all 33 instructions + PDAs + reads + math; the front consumes it.
 - **Deployer/faucet keypair**: `~/.config/solana/id.json` (= upgrade + mint authority). `pnpm run deploy` deploys/upgrades via the program keypair `anchor/target/deploy/pm_amm-keypair.json` (the prior B1fu keypair is backed up at `pm_amm-keypair.B1fu.bak.json`).
 
 ## Mainnet (LIVE)
@@ -75,15 +75,24 @@ cd oracle && python3 test_properties.py    # 18 tests (paper properties A-G)
 
 | Suite | Count | Run with |
 |---|---|---|
-| Rust unit | **72** | `pnpm run test:rust` |
-| TS integration — `pm_amm.ts` (binary lifecycle) | **18** | `pnpm run test` (localnet) |
+| Rust unit | **82** | `pnpm run test:rust` |
+| TS integration — `pm_amm.ts` (binary lifecycle) | **20** | `pnpm run test` (localnet) |
 | TS integration — `group_market.ts` (5 group ix) | **22** | (same) |
 | TS integration — `access_control.ts` | **6** | (same) |
 | TS integration — `vault.ts` (Sprint 22 commit vault) | **9** | (same) |
 | TS integration — `vault_group.ts` (Sprint 23 multi-outcome vault) | **9** | (same) |
+| TS integration — `lifecycle/bet_vault.ts` (Sprint 25 bet vault + surplus fix) | **14** | (same) |
 | Python oracle | **112** | `python3 oracle/test_oracle.py` |
 | Python properties | **18** | `python3 oracle/test_properties.py` |
-| **Total (Rust + TS + Python)** | **266** | (collected manually) |
+| **Total (Rust + TS + Python)** | **292** | (collected manually) |
+
+`anchor test` runs **surfpool**, not `solana-test-validator`: blocks (and the
+clock) advance per transaction, not with wall time. So `tests/lifecycle/*.ts`
+moves the clock by sending throwaway transfers, and it runs last (see the
+`test` script in `Anchor.toml`) because it leaves the chain clock minutes ahead
+of wall time, which breaks the other suites' `Date.now()`-based `end_ts`.
+A surfpool left over from an earlier run is reused with its advanced clock —
+`pkill -f surfpool` before `anchor test` if suites fail with `InvalidDuration`.
 
 ## Architecture
 
@@ -91,8 +100,10 @@ cd oracle && python3 test_properties.py    # 18 tests (paper properties A-G)
 pm-amm/
   anchor/                # Anchor workspace
     programs/pm_amm/src/
-      instructions/      # 10 binary + 5 group-market instructions (Sprint 21)
+      instructions/      # 10 binary + 5 group + 11 vault + 7 bet-vault instructions
         group/           # initialize/attach/resolve/resolve_leg/cancel
+        vault/           # commitment vault (Sprint 22) + multi-outcome (23)
+        bet/             # Bet Vault v2 (Sprint 25) — winner takes the pot
       pm_math.rs         # Fixed-point math (phi, Phi, Phi_inv, reserves, swap)
       accrual.rs         # dC_t mechanism — LP residual redistribution
       state.rs           # Market, LpPosition, GroupMarket accounts
@@ -149,6 +160,23 @@ when it is, a follow-up sprint can adapt leg seeding to use `mint_pair` instead 
   (`resolve_group_leg`). No `detach` instruction yet.
 
 ## Current Sprint
+
+Sprint 25 (branch `feat/bet-vault-v2`, NOT deployed) — Bet Vault v2 + entry-side
+surplus fix. Spec + open items: `doc/sprints/sprint-25-bet-vault-v2.md`.
+- **Surplus fix**: calibrating `max(x, y) = deposit` locked collateral that no
+  token could claim (73.37 USDC per 100 deposited at 70%). It is now credited as
+  `LpPosition::excess_*` / `Market::unclaimed_excess_*` (carved from padding, so
+  account sizes are unchanged) and minted on claim/withdraw. Already-stranded
+  collateral on deployed markets is NOT recovered (4.71 USDC on mainnet).
+- **Bet Vault v2**: new `BetVault`/`BetPosition` accounts + 7 instructions.
+  Committers are bettors (winner takes the pot, loser 0); `effective_lp_bps` of
+  the pot seeds the AMM, capped at the favourite's stake share so a winner can
+  never receive less than their stake. Launch/resolve are authority/resolver-only
+  and the vault PDA is `market.authority` (creator fee flows into the pot).
+- **`swap` fee hole fixed**: `creator_usdc = None` now requires the signer to be
+  the market authority (any trader could keep the creator's 1%).
+
+### Previous — Sprint 23
 
 Sprint 23 — Multi-outcome Commitment Vault. Permissionless crowd-bootstrapped categorical markets
 (2..=8 legs). Authority sets leg names; crowd commits USDC per-leg; launch creates the GroupMarket

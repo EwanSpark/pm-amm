@@ -1,6 +1,7 @@
 //! Instruction handlers for pm-AMM.
 
 pub mod accrue;
+pub mod bet;
 pub mod claim_lp_residuals;
 pub mod claim_winnings;
 pub mod deposit_liquidity;
@@ -15,6 +16,7 @@ pub mod withdraw_liquidity;
 
 #[allow(ambiguous_glob_reexports)]
 pub use accrue::*;
+pub use bet::*;
 pub use claim_lp_residuals::*;
 pub use claim_winnings::*;
 pub use deposit_liquidity::*;

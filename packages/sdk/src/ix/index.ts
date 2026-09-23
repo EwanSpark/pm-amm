@@ -4,3 +4,4 @@ export * from "./market";
 export * from "./group";
 export * from "./vault";
 export * from "./vaultGroup";
+export * from "./bet";

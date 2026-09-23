@@ -51,6 +51,23 @@ export interface CreateVaultInput {
   minTotalUsdc: number;
 }
 
+export interface CreateBetVaultInput {
+  name: string;
+  commitDurationSecs: number;
+  marketDurationSecs: number;
+  /** Minimum total stake (human units of the collateral) required to launch. */
+  minTotal: number;
+  /** Share of the pot deposited as liquidity, in bps (capped on-chain at the
+   *  favourite's stake share). Default 5000. */
+  lpBps?: number;
+  /** Only key allowed to resolve. Defaults to the creator. */
+  resolver?: PublicKey;
+  /** Up to 8 keys allowed to commit (e.g. the two sides of a 1v1). Empty = open. */
+  allowlist?: PublicKey[];
+  /** Collateral mint (any SPL token). Defaults to the client's collateral. */
+  collateralMint?: PublicKey;
+}
+
 export interface CreateVaultGroupInput {
   name: string;
   /** 2–8 leg labels (each 1–32 bytes). */
